@@ -1,0 +1,1682 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Crucible</title>
+
+
+<style>
+  /*#region Theme*/
+  :root {
+    --bg: #0c0a14;
+    --panel: #161426;
+    --panel2: #221f38;
+    --ink: #e8e3ff;
+    --dim: #8a83b0;
+    --accent: #ff8a3d;
+    --accent2: #6cf2c9;
+  }
+  /*#endregion*/
+
+  /*#region Layout & Containers*/
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: ui-monospace, "JetBrains Mono", Consolas, monospace;
+    font-size: 13px;
+    overflow: hidden;
+    height: 100%;
+  }
+  #app {
+    display: flex;
+    height: 100vh;
+    width: 100vw;
+  }
+  #sidebar {
+    width: 220px;
+    background: var(--panel);
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    border-right: 1px solid #000;
+    overflow-y: auto;
+  }
+  /*#endregion*/
+
+  /*#region Sidebar UI*/
+  h1 {
+    margin: 0;
+    font-size: 16px;
+    letter-spacing: 0.08em;
+    color: var(--accent);
+    text-transform: uppercase;
+  }
+  .sub {
+    font-size: 10px;
+    color: var(--dim);
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+  .palette {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 4px;
+  }
+  .pBtn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 6px;
+    background: var(--panel2);
+    border: 1px solid transparent;
+    border-radius: 4px;
+    cursor: pointer;
+    color: var(--ink);
+    font: inherit;
+    text-align: left;
+    transition: background 0.1s, border-color 0.1s;
+  }
+  .pBtn:hover { background: #2c2848; }
+  .pBtn.active { border-color: var(--accent); background: #2c2848; }
+  .swatch {
+    width: 14px; height: 14px;
+    border-radius: 3px;
+    border: 1px solid #000;
+    flex-shrink: 0;
+  }
+  .controls { display: flex; flex-direction: column; gap: 6px; }
+  .row { display: flex; align-items: center; gap: 6px; }
+  .row label { flex: 1; color: var(--dim); }
+  input[type=range] { flex: 1.4; }
+  button.act {
+    padding: 6px 10px;
+    background: var(--panel2);
+    border: 1px solid #000;
+    color: var(--ink);
+    border-radius: 4px;
+    cursor: pointer;
+    font: inherit;
+  }
+  button.act:hover { background: #2c2848; }
+  /*#endregion*/
+
+  /*region Canvas & HUD*/
+  #canvasWrap {
+    flex: 1;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #050409;
+    overflow: hidden;
+  }
+  canvas {
+    display: block;
+    image-rendering: pixelated;
+    cursor: crosshair;
+    box-shadow: 0 0 40px rgba(255,138,61,0.15);
+    background: #000;
+  }
+  #hud {
+    position: absolute;
+    top: 8px; left: 8px;
+    background: rgba(12,10,20,0.7);
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    color: var(--dim);
+    pointer-events: none;
+  }
+  #hud span { color: var(--accent2); }
+  .legend {
+    font-size: 10px;
+    color: var(--dim);
+    line-height: 1.5;
+  }
+  .legend b { color: var(--ink); }
+  details summary { cursor: pointer; color: var(--dim); font-size: 11px; padding: 2px 0; }
+  details[open] summary { color: var(--ink); }
+  /*endregion*/
+</style>
+
+</head>
+<body>
+
+<div id="app">
+
+  <aside id="sidebar">
+    <h1>Crucible</h1>
+    <div class="sub">Powder &amp; Heat</div>
+
+    <div class="sub">Elements</div>
+    <div class="palette" id="palette"></div>
+
+    <div class="sub">Brush</div>
+    <div class="controls">
+      <div class="row"><label>Size</label><input id="brush" type="range" min="1" max="40" value="6" /></div>
+      <div class="row"><label>Heat Pen</label><input id="heatPen" type="range" min="-200" max="800" value="20" step="10" /></div>
+      <div class="row"><label id="heatPenLbl" style="font-size:10px;color:var(--accent2);">20°</label></div>
+    </div>
+
+    <div class="sub">Actions</div>
+    <div class="controls">
+      <button class="act" id="pause">Pause (Space)</button>
+      <button class="act" id="clear">Clear (C)</button>
+      <button class="act" id="showHeat">Toggle Heat View (H)</button>
+    </div>
+
+    <div class="sub">Scenes</div>
+    <div class="controls">
+      <button class="act" data-scene="volcano">Volcano</button>
+      <button class="act" data-scene="aquarium">Aquarium</button>
+      <button class="act" data-scene="demolition">Demolition</button>
+      <button class="act" data-scene="winter">Winter Pond</button>
+      <button class="act" data-scene="storm">Lightning Lab</button>
+    </div>
+
+    <div class="sub">Tips</div>
+    <div class="legend">
+      <b>Right-click</b> erases.<br>
+      <b>1–9</b> selects element.<br>
+      Heat propagates between cells.<br>
+      <b>Lava + Water → Stone + Steam</b>.<br>
+      <b>Sand + Heat → Glass</b>.<br>
+      <b>Wood + Fire → Fire + Smoke</b>.<br>
+      <b>Plant</b> grows near water in light.<br>
+      <b>Acid</b> dissolves most solids.<br>
+      <b>Gunpowder</b> ignites with heat.<br>
+      Try dropping water on lava!
+    </div>
+
+    <details>
+      <summary>Stats</summary>
+      <div class="legend" id="stats">…</div>
+    </details>
+  </aside>
+
+
+  <div id="canvasWrap">
+    <canvas id="sim"></canvas>
+    <div id="hud">FPS <span id="fps">--</span> · Active <span id="active">0</span> · Brush <span id="bsz">4</span></div>
+  </div>
+
+</div>
+
+<script>
+
+// =====================================================================
+// =====================================================================
+//                      CRUCIBLE — falling sand game
+// =====================================================================
+// =====================================================================
+"use strict";
+
+
+
+// =====================================================================
+//           Setup - Globals, general helpers
+// =====================================================================
+//region === Setup ===
+
+/** @typedef {[number, number, number]} RGBTriplet */
+
+// Sizing and resolution setup
+const COLS = 400;
+const ROWS = 280;
+const PX_PER_CELL = 4;
+const WIDTH = COLS * PX_PER_CELL;
+const HEIGHT = ROWS * PX_PER_CELL;
+
+// Miscellaneous general helpers
+/**
+ * Returns a random integer between 0 to n-1, inclusive.
+ * @param {number} n - exclusive upper bound
+ * @returns {number} - random int result
+ */
+function randInt(n) {
+  return (Math.random() * n) | 0;
+}
+/**
+ * Returns true with probability p, otherwise false
+ * @param {number} p - probability, between (0.0, 1.0)
+ * @returns {boolean} - random true with probability p, else false
+ */
+function randChance(p) {
+  return Math.random() < p;
+}
+//endregion === Setup ===
+
+
+
+// =====================================================================
+//           Element Registry - Where elements are defined and ID'd
+// =====================================================================
+//region === Element Registry ===
+
+// Class to represent every element in the game (NO subclassing ever, fuck that noise)
+class Element {
+  // Auto increment to assign next ID, determined by instantiation order
+  static #nextId = 0;
+  // Public so hot loops can hoist `const ELEMENTS = Element.registry` once at function entry
+  // and then do direct typed-array indexing. Cold paths can use `Element.registry[id]` directly.
+  static registry = [];
+
+
+  /**
+   * @param {object} spec
+   */
+  constructor(spec) {
+    // Validate required fields BEFORE assignment
+    if (!spec.name) throw new Error(`Element: name is required`);
+    if (!spec.kind) throw new Error(`Element: kind is required`);
+    if (typeof spec.defaultTemp !== 'number') {
+      throw new Error(`Element ${spec.name}: defaultTemp is required (number)`);
+    }
+    // No array check here — #parseColor validates the string form itself.
+
+    // Assign all spec-driven fields (defaulting optionals to null or hardcoded)
+    this.name        = spec.name;
+    this.kind        = spec.kind;
+    this.color       = Element.#parseColor(spec.color, spec.name);
+    this.defaultTemp = spec.defaultTemp;
+
+    this.density          = spec.density          ?? null;
+    this.spread           = spec.spread           ?? null;
+    this.lifetime         = spec.lifetime         ?? null;
+    this.ignitionChance   = spec.ignitionChance   ?? null;
+    this.burnTemp         = spec.burnTemp         ?? null;
+    this.detonateAtTemp   = spec.detonateAtTemp   ?? null;
+
+    this.thermalMass        = spec.thermalMass        ?? 4;
+    this.ambientTempTarget  = spec.ambientTempTarget  ?? null;
+    this.ambientBleedRate   = spec.ambientBleedRate   ?? null;
+
+    // Auto-derive validation: any spec key we didn't pick up is invalid
+    for (const key of Object.keys(spec)) {
+      if (!(key in this)) {
+        throw new Error(`Element ${spec.name}: unknown spec property "${key}"`);
+      }
+    }
+
+    // Metadata — assigned AFTER the validation check
+    this.id = Element.#nextId++;
+    Element.registry[this.id] = this;
+
+    Object.freeze(this);
+  }
+
+  /**
+   * Parse an rgb("rgb(r,g,b)") or hex ("#rrggbb") string into [r, g, b].
+   * @param {string} value
+   * @param {string} nameForError - element name used in error messages
+   */
+  static #parseColor(value, nameForError) {
+    if (typeof value !== 'string') {
+      throw new Error(`Element ${nameForError}: color must be a CSS-format string like "rgb(68, 124, 222)" or "#447CDE"`);
+    }
+
+    const rgbMatch = value.match(/^rgb\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)$/);
+    if (rgbMatch) {
+      const r = parseInt(rgbMatch[1], 10);
+      const g = parseInt(rgbMatch[2], 10);
+      const b = parseInt(rgbMatch[3], 10);
+      if ([r, g, b].some(c => c < 0 || c > 255)) {
+        throw new Error(`Element ${nameForError}: RGB components must be 0-255, got ${value}`);
+      }
+      return [r, g, b];
+    }
+
+    const hexMatch = value.match(/^#([0-9a-fA-F]{6})$/);
+    if (hexMatch) {
+      const n = parseInt(hexMatch[1], 16);
+      return [(n >> 16) & 0xff, (n >> 8) & 0xff, n & 0xff];
+    }
+
+    throw new Error(`Element ${nameForError}: color must be "rgb(r, g, b)" or "#rrggbb", got "${value}"`);
+  }
+
+}
+
+// Full element registry
+Element.EMPTY =  new Element({ name: "Eraser", kind: "empty", color: "#080610", defaultTemp: 20});
+Element.WALL =  new Element({ name: "Wall", kind: "static", color: "#78768C", defaultTemp: 20});
+Element.SAND =  new Element({ name: "Sand", kind: "powder", color: "#E0C171", defaultTemp: 20, density: 4});
+Element.WATER =  new Element({ name: "Water", kind: "liquid", color: "#447CDE", defaultTemp: 20, density: 2, spread: 6});
+Element.WOOD =  new Element({ name: "Wood", kind: "static", color: "#6E4628", defaultTemp: 20, ignitionChance: 0.012, burnTemp: 220});
+Element.FIRE =  new Element({ name: "Fire", kind: "gas", color: "#FF8C28", defaultTemp: 540, lifetime: 60});
+Element.LAVA =  new Element({ name: "Lava", kind: "liquid", color: "#E6461E", defaultTemp: 700, density: 6, spread: 1});
+Element.STEAM =  new Element({ name: "Steam", kind: "gas", color: "#B4C8DC", defaultTemp: 130, lifetime: 600});
+Element.ICE =  new Element({ name: "Ice", kind: "static", color: "#AAD2EB", defaultTemp: -10});
+Element.STONE =  new Element({ name: "Stone", kind: "powder", color: "#645A5A", defaultTemp: 30, density: 5});
+Element.GLASS =  new Element({ name: "Glass", kind: "static", color: "#A0D2DC", defaultTemp: 40});
+Element.PLANT =  new Element({ name: "Plant", kind: "static", color: "#50C864", defaultTemp: 20, ignitionChance: 0.02, burnTemp: 180});
+Element.ACID =  new Element({ name: "Acid", kind: "liquid", color: "#B4FF50", defaultTemp: 20, density: 2, spread: 3});
+Element.GUNPOWDER =  new Element({ name: "Gunpowder", kind: "powder", color: "#3C3C3C", defaultTemp: 20, density: 4, detonateAtTemp: 200});
+Element.SMOKE =  new Element({ name: "Smoke", kind: "gas", color: "#3C3C48", defaultTemp: 80, lifetime: 200});
+Element.OIL =  new Element({ name: "Oil", kind: "liquid", color: "#502850", defaultTemp: 20, density: 1, spread: 4, ignitionChance: 0.05, burnTemp: 130});
+Element.SPARK =  new Element({ name: "Spark", kind: "gas", color: "#FFFFA0", defaultTemp: 600, lifetime: 8});
+Element.FUSE =  new Element({ name: "Fuse", kind: "static", color: "#B48C50", defaultTemp: 20});
+Element.EMBER =  new Element({ name: "Ember", kind: "gas", color: "#FFAA3C", defaultTemp: 400, lifetime: 24});
+Element.SALT =  new Element({ name: "Salt", kind: "powder", color: "#E6E6EB", defaultTemp: 20, density: 4});
+Element.STORMGLASS =  new Element({ name: "Stormglass", kind: "static", color: "#C8DCF0", defaultTemp: 20});
+Element.MOLD =  new Element({ name: "Mold", kind: "static", color: "#6E8C50", defaultTemp: 20});
+
+// Freeze the Element Registry so the tomato juice company can better optimize
+Object.freeze(Element)
+
+//endregion === Element Registry ===
+
+
+
+// =====================================================================
+//           Grid - Grid setup, helpers, and CRUD
+// =====================================================================
+//region === Grid ===
+
+// Grid state setup
+const GRID_SIZE = COLS * ROWS;
+const grid = {
+  // Frame persistent world state
+  elements : new Uint8Array(GRID_SIZE),
+  temps : new Int16Array(GRID_SIZE),
+  lifetimes : new Int16Array(GRID_SIZE),
+  flags: new Uint8Array(GRID_SIZE),
+
+  // Throwaway scratch memory
+  movedThisFrame : new Uint8Array(GRID_SIZE),
+  tempsBuffer : new Int16Array(GRID_SIZE)
+}
+// Initialize temperatures to ambient
+for (let i = 0; i < GRID_SIZE; i++) grid.temps[i] = 20;
+
+// Grid coordinate helpers
+/**
+ * Converts an (x,y) coordinate into a flat grid index.
+ * @param {number} x - x (column) coordinate
+ * @param {number} y - y (row) coordinate
+ * @returns {number} - flat grid index
+ */
+function cellIndex(x, y) {
+  return y * COLS + x;
+}
+/**
+ * Returns x (column) from a flat grid index.
+ * @param {number} i - flat grid index
+ * @returns {number} - x (column) coordinate
+ */
+function cellX(i) {
+  return i % COLS;
+}
+/**
+ * Returns y (row) from a flat grid index.
+ * @param {number} i - flat grid index
+ * @returns {number} - y (row) coordinate
+ */
+function cellY(i) {
+  return (i / COLS) | 0;
+}
+/**
+ * Returns true or false if (x,y) is in bounds.
+ * @param {number} x - x (column) coordinate
+ * @param {number} y - y (row) coordinate
+ * @return {boolean} - if coordinate is in bounds
+ */
+function cellInBounds(x, y) {
+  return x >= 0 && y >= 0 && x < COLS && y < ROWS;
+}
+
+// Grid CRUD
+/**
+ * Sets the cell at position (x,y) to element, with optional temperature.
+ * @param {number} x - column, 0 to COLS-1
+ * @param {number} y - row, 0 to ROWS-1
+ * @param {Element} element - the element to set this cell to
+ * @param {number} [temperature] - optional temperature to set to
+ */
+function setCell(x, y, element, temperature) {
+  // Return on bad coordinates
+  if (!cellInBounds(x, y)) return;
+
+  // Set to provided element
+  const i = cellIndex(x, y);
+  grid.elements[i] = element.id;
+
+  // Set to the provided temperature if given, otherwise set cell to default temperature for this element.
+  if (temperature !== undefined) {
+    grid.temps[i] = temperature;
+  }
+  else {
+    grid.temps[i] = element.defaultTemp;
+  }
+
+  // If this element has a lifetime, set this cell with it and a small random offset. Otherwise, no lifetime.
+  if (element.lifetime !== null) {
+    grid.lifetimes[i] = element.lifetime + randInt(20);
+  }
+  else {
+    grid.lifetimes[i] = 0;
+  }
+
+  // Remove flags for this cell.
+  grid.flags[i] = 0;
+}
+/**
+ * Clears the cell at flat grid index i. Heat is retained by air briefly.
+ * @param {number} i - flat grid index
+ */
+function clearCell(i) {
+  grid.elements[i] = Element.EMPTY.id;
+  grid.lifetimes[i] = 0;
+  grid.flags[i] = 0;
+  // Keep temperature, air retains heat briefly
+}
+/**
+ * Moves cell i to cell j, *overwriting* what was previously in cell entirely.
+ * @param {number} i - flat grid index of the cell targeted to be moved
+ * @param {number} j - flat grid index of the cell to be moved to
+ */
+function moveCell(i, j) {
+  // Simply copy all contents from cell i to cell j, overwriting everything in j.
+  grid.elements[j] = grid.elements[i];
+  grid.temps[j] = grid.temps[i];
+  grid.lifetimes[j] = grid.lifetimes[i];
+  grid.flags[j] = grid.flags[i];
+
+  // Clear the original contents of i, now that it is considered to have moved out of that cell.
+  clearCell(i);
+
+  // j has moved this frame, but i simply emptied, it didn't move.
+  grid.movedThisFrame[j] = 1;
+}
+/**
+ * Swaps the contents of cells i and j
+ * @param {number} i - flat grid index for cell i
+ * @param {number} j - flat grid index for cell j
+ */
+function swapCells(i, j) {
+  // Save cell i's data in buffers before we overwrite with cell j's data.
+  const iElement = grid.elements[i];
+  const iTemp = grid.temps[i];
+  const iLifetime = grid.lifetimes[i];
+  const iFlag = grid.flags[i];
+
+  // Copy cell j into cell i
+  grid.elements[i] = grid.elements[j];
+  grid.temps[i] = grid.temps[j];
+  grid.lifetimes[i] = grid.lifetimes[j];
+  grid.flags[i] = grid.flags[j];
+
+  // Write the saved cell i data into cell j.
+  grid.elements[j] = iElement;
+  grid.temps[j] = iTemp;
+  grid.lifetimes[j] = iLifetime;
+  grid.flags[j] = iFlag;
+
+  // Both cells have now moved this frame.
+  grid.movedThisFrame[i] = 1;
+  grid.movedThisFrame[j] = 1;
+}
+
+//endregion === Grid ===
+
+
+
+
+
+//region === Engine ===
+
+let frame = 0;
+function step() {
+  // Advance a single frame.
+  frame++;
+
+  // Since we are now on a new frame, ALL cells are initially considered to have not yet moved this frame.
+  grid.movedThisFrame.fill(0);
+
+  // 1) Heat diffusion — simple averaging with neighbours.
+  //    Done as a separate pass so order doesn't bias temperatures.
+  diffuseHeat();
+
+  // 2) Reactions — temperature-driven phase changes & burning.
+  reactions();
+
+  // 3) Movement — bottom-up, with alternating L/R scan to avoid bias.
+  const leftFirst = (frame & 1) === 0;
+  for (let y = ROWS - 1; y >= 0; y--) {
+    if (leftFirst) {
+      for (let x = 0; x < COLS; x++) updateCell(x, y);
+    } else {
+      for (let x = COLS - 1; x >= 0; x--) updateCell(x, y);
+    }
+  }
+}
+
+// We sample each cell's neighbors and pull a fraction of their temp toward
+// ours. Use the previous-frame temps via copy to avoid order bias.
+function diffuseHeat() {
+  // TODO: HEAT SYSTEM OVERHAUL (weekend deep dive)
+  // The current heat system is data-driven on these three ElementMeta
+  // properties, but the underlying physics is approximate:
+  //   - No real latent heat at phase transitions (water→steam just happens at 100°)
+  //   - No proper convection — hot cells carry their heat by rising, but the
+  //     surrounding air doesn't displace and reorganize
+  //   - No Stefan-Boltzmann radiation — heat transfer is purely linear in
+  //     temperature difference, not T^4 like real radiation
+  //   - The ambient bleed numbers are tuned by vibe, not derived
+  // Revisit: convection model, latent heat bookkeeping, possibly separate the
+  // gas-phase logic into its own pass. Tune numbers via playtest, not derivation.
+
+
+  // First, copy over last frame's temperatures to the buffer.
+  grid.tempsBuffer.set(grid.temps);
+
+  //
+  for (let y = 0; y < ROWS; y++) {
+    for (let x = 0; x < COLS; x++) {
+      const i = cellIndex(x, y);
+      const thisElement = grid.elements[i];
+
+      // thermal mass — ice resists temperature change strongly so it persists in warm air
+      let selfW = 4;
+      if (thisElement === Element.ICE.id) {
+        selfW = 24;
+      }
+      else if (thisElement === Element.STONE.id) {
+        selfW = 8;
+      }
+      else if (thisElement === Element.WALL.id || thisElement === Element.GLASS.id) {
+        selfW = 10;
+      }
+
+      let sum = grid.tempsBuffer[i] * selfW;
+      let n = selfW;
+      if (x > 0)        {
+        sum += grid.tempsBuffer[i - 1];
+        n++;
+      }
+      if (x < COLS - 1) {
+        sum += grid.tempsBuffer[i + 1];
+        n++;
+      }
+      if (y > 0)        {
+        sum += grid.tempsBuffer[i - COLS];
+        n++;
+      }
+      if (y < ROWS - 1) {
+        sum += grid.tempsBuffer[i + COLS];
+        n++;
+      }
+
+      let avg = sum / n;
+      // ambient bleed — different elements equilibrate toward different temps
+      if (thisElement === Element.EMPTY.id) {
+        avg = avg * 0.90 + 20 * 0.10;            // air cools fast to 20
+      } else if (thisElement === Element.WATER.id) {
+        avg = avg * 0.97 + 20 * 0.03;            // water bleeds slowly to 20
+      } else if (thisElement === Element.ICE.id) {
+        avg = avg * 0.85 + (-10) * 0.15;          // ice actively maintains coldness
+      } else if (thisElement === Element.STEAM.id || thisElement === Element.SMOKE.id) {
+        avg = grid.tempsBuffer[i] * 0.7 + avg * 0.3;       // gases hold heat, no ambient bleed
+      }
+      grid.temps[i] = avg | 0;
+    }
+  }
+}
+//endregion === Engine ===
+
+
+
+
+//#region Simulation
+
+//#region Step Orchestrator
+
+//#endregion
+
+//#region Heat Diffusion
+
+//#endregion
+
+//#region Reactions
+function reactions() {
+  // Hoist registry to a function-local so per-cell metadata reads are raw array indexing
+  // (no method call, no chained property access). See perf notes on Element class.
+  const ELEMENTS = Element.registry;
+  // Cache every element ID as a true function-local so the switch below can be compiled
+  // into a jump table (V8 + SpiderMonkey both require case labels to be literal-looking
+  // integers; chained `Element.X.id` access disqualifies the optimization and forces a
+  // linear walk through all 22 cases per cell per frame).
+  const ID_EMPTY      = Element.EMPTY.id,
+        ID_WALL       = Element.WALL.id,
+        ID_SAND       = Element.SAND.id,
+        ID_WATER      = Element.WATER.id,
+        ID_WOOD       = Element.WOOD.id,
+        ID_FIRE       = Element.FIRE.id,
+        ID_LAVA       = Element.LAVA.id,
+        ID_STEAM      = Element.STEAM.id,
+        ID_ICE        = Element.ICE.id,
+        ID_STONE      = Element.STONE.id,
+        ID_GLASS      = Element.GLASS.id,
+        ID_PLANT      = Element.PLANT.id,
+        ID_ACID       = Element.ACID.id,
+        ID_GUNPOWDER  = Element.GUNPOWDER.id,
+        ID_SMOKE      = Element.SMOKE.id,
+        ID_OIL        = Element.OIL.id,
+        ID_SPARK      = Element.SPARK.id,
+        ID_FUSE       = Element.FUSE.id,
+        ID_EMBER      = Element.EMBER.id,
+        ID_SALT       = Element.SALT.id,
+        ID_STORMGLASS = Element.STORMGLASS.id,
+        ID_MOLD       = Element.MOLD.id;
+
+  for (let i = 0; i < GRID_SIZE; i++) {
+    const eid = grid.elements[i];
+    if (eid === ID_EMPTY) continue;
+    const t = grid.temps[i];
+
+    switch (eid) {
+
+      case ID_WATER:
+        if (t >= 100)        { grid.elements[i] = ID_STEAM;  grid.lifetimes[i] = 700 + randInt(300); grid.temps[i] = 130; }
+        else if (t <= -2)    { grid.elements[i] = ID_ICE; }
+        break;
+      case ID_STEAM:
+        if (t < 60)          { grid.elements[i] = ID_WATER; grid.lifetimes[i] = 0; grid.temps[i] = 50; }
+        else if (--grid.lifetimes[i] <= 0) { clearCell(i); }
+        break;
+      case ID_ICE:
+        if (t >= 1)          { grid.elements[i] = ID_WATER; }
+        break;
+
+      case ID_LAVA:
+        if (t < 600) grid.temps[i] = 600;  // lava self-heats slightly
+        if (t < 480)         { grid.elements[i] = ID_STONE; grid.temps[i] = 460; }
+        break;
+      case ID_STONE:
+        if (t >= 1100)       { grid.elements[i] = ID_LAVA;  grid.temps[i] = 700; }
+        break;
+
+      case ID_SAND:
+        if (t >= 700)        { grid.elements[i] = ID_GLASS; grid.temps[i] = 500; }
+        break;
+      case ID_GLASS:
+        if (t >= 1000)       { grid.elements[i] = ID_LAVA;  grid.temps[i] = 800; }
+        break;
+
+      case ID_FIRE:
+        // fire dies down naturally
+        if (--grid.lifetimes[i] <= 0) {
+          if (randChance(0.4)) { grid.elements[i] = ID_SMOKE; grid.lifetimes[i] = 120 + randInt(80); grid.temps[i] = 80; }
+          else clearCell(i);
+        } else {
+          grid.temps[i] = 500 + randInt(120);
+          igniteNeighbours(cellX(i), cellY(i));
+          // smoke above
+          if (randChance(0.04) && y_above_empty(i)) {
+            const j = i - COLS;
+            grid.elements[j] = ID_SMOKE; grid.lifetimes[j] = 80 + randInt(60); grid.temps[j] = 90;
+          }
+          // embers above — pretty rising flecks
+          if (randChance(0.06) && y_above_empty(i)) {
+            const j = i - COLS;
+            grid.elements[j] = ID_EMBER; grid.lifetimes[j] = 14 + randInt(14); grid.temps[j] = 380;
+          }
+        }
+        break;
+      case ID_SMOKE:
+        if (--grid.lifetimes[i] <= 0) clearCell(i);
+        break;
+
+      case ID_SPARK: {
+        if (grid.movedThisFrame[i]) break;  // freshly spawned this frame — let it decay/spread next frame
+        if (--grid.lifetimes[i] <= 0) { clearCell(i); break; }
+        grid.temps[i] = 600;
+        const xs = cellX(i), ys = cellY(i);
+        igniteNeighbours(xs, ys);
+        // CONDUCT through water: jump into a random water neighbour, leaving water behind.
+        const dirs = [[-1,0],[1,0],[0,-1],[0,1]];
+        for (let k = dirs.length - 1; k > 0; k--) {
+          const r = randInt(k+1); const tmp = dirs[k]; dirs[k] = dirs[r]; dirs[r] = tmp;
+        }
+        for (let k = 0; k < dirs.length; k++) {
+          const nx = xs + dirs[k][0], ny = ys + dirs[k][1];
+          if (!cellInBounds(nx, ny)) continue;
+          const j = cellIndex(nx,ny);
+          if (grid.elements[j] === ID_WATER) {
+            grid.elements[j] = ID_SPARK; grid.lifetimes[j] = 6 + randInt(4); grid.temps[j] = 600; grid.movedThisFrame[j] = 1;
+            grid.elements[i] = ID_WATER; grid.lifetimes[i] = 0; grid.temps[i] = 30;
+            break;
+          }
+          if (grid.elements[j] === ID_GUNPOWDER) { grid.temps[j] += 220; }
+        }
+        break;
+      }
+
+      case ID_GUNPOWDER:
+        if (t >= Element.GUNPOWDER.detonateAtTemp) {
+          // BOOM: convert to fire + spark, push neighbours
+          grid.elements[i] = ID_FIRE; grid.lifetimes[i] = 25 + randInt(25); grid.temps[i] = 700;
+          for (let dy = -1; dy <= 1; dy++) {
+            const xs = cellX(i), ys = cellY(i);
+            for (let dx = -1; dx <= 1; dx++) {
+              const xx = xs + dx, yy = ys + dy;
+              if (!cellInBounds(xx, yy)) continue;
+              const j = cellIndex(xx,yy);
+              if (grid.elements[j] === ID_EMPTY) {
+                if (randChance(0.5)) { grid.elements[j] = ID_FIRE; grid.lifetimes[j] = 20 + randInt(20); grid.temps[j] = 600; }
+              } else if (grid.elements[j] === ID_GUNPOWDER) {
+                grid.temps[j] += 200;
+              } else if (grid.elements[j] !== ID_WALL) {
+                grid.temps[j] += 120;
+              }
+            }
+          }
+        }
+        break;
+
+      case ID_WOOD:
+      case ID_PLANT:
+      case ID_OIL: {
+        const thisElement = ELEMENTS[eid];
+        if (t >= thisElement.burnTemp && randChance(thisElement.ignitionChance)) {
+          grid.elements[i] = ID_FIRE; grid.lifetimes[i] = 60 + randInt(60); grid.temps[i] = 500;
+        }
+        // plant growth
+        if (eid === ID_PLANT) plantGrow(i);
+        break;
+      }
+
+      case ID_FUSE: {
+        // fuse lights when hot OR adjacent to fire/spark/lit fuse
+        const lit = grid.flags[i] === 1;
+        if (!lit) {
+          let ignite = t >= 150;
+          if (!ignite) {
+            const xs = cellX(i), ys = cellY(i);
+            for (let dy = -1; dy <= 1 && !ignite; dy++) {
+              for (let dx = -1; dx <= 1 && !ignite; dx++) {
+                if (!dx && !dy) continue;
+                const nx = xs + dx, ny = ys + dy;
+                if (!cellInBounds(nx, ny)) continue;
+                const k = cellIndex(nx,ny);
+                const ne = grid.elements[k];
+                if (ne === ID_FIRE || ne === ID_SPARK || ne === ID_LAVA) ignite = true;
+                if (ne === ID_FUSE && grid.flags[k] === 1 && grid.lifetimes[k] < 18) ignite = true;
+              }
+            }
+          }
+          if (ignite) { grid.flags[i] = 1; grid.lifetimes[i] = 28 + randInt(8); grid.temps[i] = 250; }
+        } else {
+          // burning — fuse cell counts down, then puff into ember + ignite gunpowder if touching
+          grid.temps[i] = 320;
+          if (--grid.lifetimes[i] <= 0) {
+            // emit a small ember above if room, then become empty (or smoke briefly)
+            const xs = cellX(i), ys = cellY(i);
+            if (ys > 0 && grid.elements[i - COLS] === ID_EMPTY) {
+              const j = i - COLS;
+              grid.elements[j] = ID_EMBER; grid.lifetimes[j] = 20 + randInt(20); grid.temps[j] = 380;
+            }
+            // ignite touching gunpowder directly
+            for (let dy = -1; dy <= 1; dy++) {
+              for (let dx = -1; dx <= 1; dx++) {
+                if (!dx && !dy) continue;
+                const nx = xs + dx, ny = ys + dy;
+                if (!cellInBounds(nx, ny)) continue;
+                const k = cellIndex(nx,ny);
+                if (grid.elements[k] === ID_GUNPOWDER) grid.temps[k] += 250;
+              }
+            }
+            clearCell(i);
+          }
+        }
+        break;
+      }
+
+      case ID_EMBER: {
+        if (--grid.lifetimes[i] <= 0) clearCell(i);
+        else grid.temps[i] = 380;
+        break;
+      }
+
+      case ID_ACID:
+        acidEat(cellX(i), cellY(i));
+        break;
+
+      case ID_SALT: {
+        // melts ice on contact and slowly dissolves into water
+        const xs = cellX(i), ys = cellY(i);
+        saltScan: for (let dy = -1; dy <= 1; dy++) {
+          for (let dx = -1; dx <= 1; dx++) {
+            if (!dx && !dy) continue;
+            const nx = xs + dx, ny = ys + dy;
+            if (!cellInBounds(nx, ny)) continue;
+            const k = cellIndex(nx,ny);
+            if (grid.elements[k] === ID_ICE && randChance(0.25)) {
+              grid.elements[k] = ID_WATER; grid.temps[k] = 5;
+            } else if (grid.elements[k] === ID_WATER && randChance(0.04)) {
+              clearCell(i);
+              break saltScan;
+            }
+          }
+        }
+        break;
+      }
+
+      case ID_STORMGLASS: {
+        // Stormglass: absorbs nearby fire/spark/lava as charge.
+        // When charge >= threshold, discharges as branching lightning through
+        // connected water (and any adjacent metal-like conductors), then turns to glass.
+        const xs = cellX(i), ys = cellY(i);
+        let gained = 0;
+        for (let dy = -1; dy <= 1; dy++) {
+          for (let dx = -1; dx <= 1; dx++) {
+            if (!dx && !dy) continue;
+            const nx = xs + dx, ny = ys + dy;
+            if (!cellInBounds(nx, ny)) continue;
+            const k = cellIndex(nx,ny);
+            const ne = grid.elements[k];
+            if (ne === ID_SPARK) gained += 3;
+            else if (ne === ID_FIRE) gained += 1;
+            else if (ne === ID_LAVA) gained += 1;
+            else if (ne === ID_EMBER) gained += 1;
+          }
+        }
+        if (gained > 0) grid.flags[i] = Math.min(255, (grid.flags[i] || 0) + gained);
+        // visual heat tint as it charges
+        grid.temps[i] = 20 + (grid.flags[i] || 0) * 4;
+
+        if ((grid.flags[i] || 0) >= 12) {
+          // BFS through water from this cell, with branching, planting sparks
+          const visited = new Uint8Array(GRID_SIZE);
+          visited[i] = 1;
+          const queue = [i];
+          let head = 0, count = 0;
+          // first hop: zap any directly adjacent cell
+          for (let dy = -1; dy <= 1; dy++) {
+            for (let dx = -1; dx <= 1; dx++) {
+              if (!dx && !dy) continue;
+              const nx = xs + dx, ny = ys + dy;
+              if (!cellInBounds(nx, ny)) continue;
+              const k = cellIndex(nx,ny);
+              if (visited[k]) continue;
+              const ne = grid.elements[k];
+              if (ne === ID_WATER || ne === ID_EMPTY || ne === ID_SAND || ne === ID_WALL) {
+                if (ne === ID_WALL) continue;        // walls block the bolt
+                visited[k] = 1;
+                grid.elements[k] = ID_SPARK; grid.lifetimes[k] = 14 + randInt(8); grid.temps[k] = 600;
+                if (ne === ID_WATER) queue.push(k);
+                count++;
+              }
+            }
+          }
+          // propagate through water with branching
+          while (head < queue.length && count < 50) {
+            const cur = queue[head++];
+            const cx = cellX(cur), cy = cellY(cur);
+            for (let dy = -1; dy <= 1; dy++) {
+              for (let dx = -1; dx <= 1; dx++) {
+                if (!dx && !dy) continue;
+                const nx = cx + dx, ny = cy + dy;
+                if (!cellInBounds(nx, ny)) continue;
+                const k = cellIndex(nx,ny);
+                if (visited[k]) continue;
+                if (grid.elements[k] === ID_WATER) {
+                  // branch: skip ~30% to make it look like lightning, not a flood
+                  if (Math.random() < 0.30) { visited[k] = 1; continue; }
+                  visited[k] = 1;
+                  grid.elements[k] = ID_SPARK; grid.lifetimes[k] = 12 + randInt(8); grid.temps[k] = 600;
+                  queue.push(k);
+                  count++;
+                  if (count >= 50) break;
+                }
+              }
+            }
+          }
+          // spent: turn back into inert glass
+          grid.elements[i] = ID_GLASS; grid.flags[i] = 0; grid.temps[i] = 80;
+        }
+        break;
+      }
+
+      case ID_MOLD: {
+        // Spreads onto wet plants and oil; converts adjacent plants/oil to mold;
+        // dies into a puff of dust/smoke when touched by fire or lava.
+        const xs = cellX(i), ys = cellY(i);
+        let dies = false;
+        let waterNear = false;
+        for (let dy = -1; dy <= 1; dy++) {
+          for (let dx = -1; dx <= 1; dx++) {
+            if (!dx && !dy) continue;
+            const nx = xs + dx, ny = ys + dy;
+            if (!cellInBounds(nx, ny)) continue;
+            const k = cellIndex(nx,ny);
+            const ne = grid.elements[k];
+            if (ne === ID_FIRE || ne === ID_LAVA || ne === ID_EMBER) { dies = true; break; }
+            if (ne === ID_WATER) waterNear = true;
+          }
+          if (dies) break;
+        }
+        if (dies) {
+          // become a puff of smoke (the "dust" cloud) — drifts away
+          grid.elements[i] = ID_SMOKE; grid.lifetimes[i] = 100 + randInt(60); grid.temps[i] = 90; grid.flags[i] = 0;
+          break;
+        }
+        // try to convert one adjacent plant/oil cell into mold (faster when wet)
+        if (randChance(waterNear ? 0.06 : 0.012)) {
+          const dirs = [[-1,0],[1,0],[0,-1],[0,1],[-1,-1],[1,1],[-1,1],[1,-1]];
+          for (let kk = dirs.length - 1; kk > 0; kk--) {
+            const r = randInt(kk+1); const tmp = dirs[kk]; dirs[kk] = dirs[r]; dirs[r] = tmp;
+          }
+          for (const d of dirs) {
+            const nx = xs + d[0], ny = ys + d[1];
+            if (!cellInBounds(nx, ny)) continue;
+            const k = cellIndex(nx,ny);
+            const ne = grid.elements[k];
+            if (ne === ID_PLANT || ne === ID_OIL) {
+              grid.elements[k] = ID_MOLD; grid.flags[k] = 0; grid.temps[k] = 20;
+              break;
+            }
+          }
+        }
+        break;
+      }
+    }
+  }
+}
+//#endregion
+
+//#region Reaction Helpers
+function y_above_empty(i) {
+  if (i < COLS) return false;
+  return grid.elements[i - COLS] === Element.EMPTY.id;
+}
+
+function plantGrow(i) {
+  // grow toward adjacent empty cells if water nearby; slow rate
+  if (!randChance(0.02)) return;
+  if ((grid.flags[i] || 0) > 14) return;  // age cap so plants don't fill the world
+  const x = cellX(i), y = cellY(i);
+  // find water neighbour within radius 2
+  let hasWater = false;
+  for (let dy = -2; dy <= 2 && !hasWater; dy++) {
+    for (let dx = -2; dx <= 2 && !hasWater; dx++) {
+      const xx = x + dx, yy = y + dy;
+      if (!cellInBounds(xx, yy)) continue;
+      if (grid.elements[cellIndex(xx,yy)] === Element.WATER.id) hasWater = true;
+    }
+  }
+  if (!hasWater) return;
+  // sprout into a random empty neighbour, prefer up
+  const dirs = [[0,-1],[0,-1],[-1,-1],[1,-1],[-1,0],[1,0]];
+  for (let k = 0; k < 4; k++) {
+    const d = dirs[randInt(dirs.length)];
+    const xx = x + d[0], yy = y + d[1];
+    if (!cellInBounds(xx, yy)) continue;
+    const j = cellIndex(xx,yy);
+    if (grid.elements[j] === Element.EMPTY.id || grid.elements[j] === Element.WATER.id) {
+      grid.elements[j] = Element.PLANT.id; grid.temps[j] = 20; grid.flags[j] = (grid.flags[i] || 0) + 1;
+      if ((grid.flags[j] || 0) > 18) grid.flags[j] = 18;  // age cap
+      return;
+    }
+  }
+}
+
+function igniteNeighbours(x, y) {
+  // Hoist registry for fast neighbour metadata lookup (called per fire/spark cell, hot)
+  const ELEMENTS = Element.registry;
+  for (let dy = -1; dy <= 1; dy++) {
+    for (let dx = -1; dx <= 1; dx++) {
+      if (!dx && !dy) continue;
+      const nx = x + dx, ny = y + dy;
+      if (!cellInBounds(nx, ny)) continue;
+      const j = cellIndex(nx,ny);
+      const ne = grid.elements[j];
+      // heat them up
+      grid.temps[j] += 8;
+      // direct ignition chance for very flammable
+      const neElement = ELEMENTS[ne];
+      if (neElement && neElement.ignitionChance && randChance(neElement.ignitionChance * 1.2) && grid.temps[j] >= (neElement.burnTemp - 50)) {
+        grid.elements[j] = Element.FIRE.id; grid.lifetimes[j] = 50 + randInt(50); grid.temps[j] = 500;
+      }
+      if (ne === Element.GUNPOWDER.id && randChance(0.3)) grid.temps[j] += 80;
+      if (ne === Element.ICE.id) grid.temps[j] += 6;
+    }
+  }
+}
+
+function acidEat(x, y) {
+  const i = cellIndex(x, y);
+  // try to dissolve a random neighbour
+  const dirs = [[0,1],[0,-1],[-1,0],[1,0]];
+  for (let k = 0; k < 4; k++) {
+    const d = dirs[randInt(4)];
+    const nx = x + d[0], ny = y + d[1];
+    if (!cellInBounds(nx, ny)) continue;
+    const j = cellIndex(nx,ny);
+    const ne = grid.elements[j];
+    if (ne === Element.EMPTY.id || ne === Element.ACID.id || ne === Element.WALL.id || ne === Element.GLASS.id) continue;
+    if (randChance(0.06)) {
+      clearCell(j);
+      // chance acid is consumed
+      if (randChance(0.4)) clearCell(i);
+      return;
+    }
+  }
+}
+//#endregion
+
+//#region Contact Reactions
+// Reactions that fire when one moving cell tries to enter another non-empty cell.
+// Looked up by [movingElement][destinationElement] inside tryMoveOrSwap.
+//
+// Tuple form:    [resultHere, resultThere, probability] — applied on probability roll, returns true.
+// Function form: handler(i, j) does its own mutations and returns true to consume the move.
+function lavaWaterReaction(i, j) {
+  const here = grid.elements[i];
+  const lavaI = here === Element.LAVA.id ? i : j;
+  const waterI = here === Element.WATER.id ? i : j;
+  grid.elements[lavaI] = Element.STONE.id; grid.temps[lavaI] = 380; grid.lifetimes[lavaI] = 0;
+  grid.elements[waterI] = Element.STEAM.id; grid.lifetimes[waterI] = 800 + randInt(400); grid.temps[waterI] = 150;
+  grid.movedThisFrame[lavaI] = 1; grid.movedThisFrame[waterI] = 1;
+
+  // crust nearby lava — quench radius 2 with falloff, so a sea pour creates a thick crust
+  const lx = cellX(lavaI), ly = cellY(lavaI);
+  for (let dy = -2; dy <= 2; dy++) {
+    for (let dx = -2; dx <= 2; dx++) {
+      if (!dx && !dy) continue;
+      const nx = lx + dx, ny = ly + dy;
+      if (!cellInBounds(nx, ny)) continue;
+      const k = cellIndex(nx,ny);
+      if (grid.elements[k] === Element.LAVA.id) {
+        const dist = Math.abs(dx) + Math.abs(dy);
+        const p = dist === 1 ? 0.55 : dist === 2 ? 0.22 : 0.08;
+        if (Math.random() < p) {
+          grid.elements[k] = Element.STONE.id; grid.temps[k] = 360; grid.lifetimes[k] = 0; grid.movedThisFrame[k] = 1;
+        } else {
+          grid.temps[k] -= 30;  // cool the rest a bit
+        }
+      }
+    }
+  }
+  // burst extra steam above the contact point if there's room
+  const wx = cellX(waterI), wy = cellY(waterI);
+  for (let dy = -2; dy <= 0; dy++) {
+    for (let dx = -1; dx <= 1; dx++) {
+      const nx = wx + dx, ny = wy + dy;
+      if (!cellInBounds(nx, ny) || (dx === 0 && dy === 0)) continue;
+      const k = cellIndex(nx,ny);
+      if (grid.elements[k] === Element.EMPTY.id && Math.random() < 0.45) {
+        grid.elements[k] = Element.STEAM.id; grid.lifetimes[k] = 600 + randInt(400); grid.temps[k] = 140; grid.movedThisFrame[k] = 1;
+      }
+    }
+  }
+  return true;
+}
+const CONTACT_REACTIONS = {
+  [Element.LAVA.id]:  { [Element.WATER.id]: lavaWaterReaction },
+  [Element.WATER.id]: { [Element.LAVA.id]:  lavaWaterReaction },
+};
+//#endregion
+
+//#region Movement
+// ---- per-cell movement ----------------------------------------------
+function updateCell(x, y) {
+  // Hoist registry — called per cell per frame, hottest path in the engine
+  const ELEMENTS = Element.registry;
+  const i = cellIndex(x, y);
+  if (grid.movedThisFrame[i]) return;
+  const e = grid.elements[i];
+  if (e === Element.EMPTY.id || e === Element.WALL.id || e === Element.GLASS.id ||
+      e === Element.WOOD.id  || e === Element.ICE.id  || e === Element.PLANT.id || e === Element.FUSE.id ||
+      e === Element.STORMGLASS.id || e === Element.MOLD.id) return;
+
+  const element = ELEMENTS[e];
+
+  // FIRE & SPARK rise + flicker (heat/ignition handled per-tick in reactions())
+  if (e === Element.FIRE.id || e === Element.SPARK.id) {
+    const dy = randChance(0.7) ? -1 : 0;
+    const dx = randInt(3) - 1;
+    tryMoveOrSwap(i, x + dx, y + dy);
+    return;
+  }
+
+  // SMOKE & STEAM rise
+  if (element.kind === "gas") {
+    const dy = randChance(0.85) ? -1 : (randChance(0.5) ? 0 : 1);
+    const dx = randInt(3) - 1;
+    tryMoveOrSwap(i, x + dx, y + dy);
+    return;
+  }
+
+  // POWDERS
+  if (element.kind === "powder") {
+    if (tryFall(i, x, y)) return;
+    return;
+  }
+
+  // LIQUIDS — jump to furthest reachable empty cell so water actually flows fast
+  if (element.kind === "liquid") {
+    if (tryFall(i, x, y)) return;
+    const spread = element.spread || 3;
+    const dir = randChance(0.5) ? -1 : 1;
+
+    // probe preferred side: walk until blocked, jump to furthest open cell.
+    // also check if a downward path opens along the way — prefer falling.
+    let bestX = x;
+    for (let s = 1; s <= spread; s++) {
+      const nx = x + dir * s;
+      if (!cellInBounds(nx, y)) break;
+      const j = cellIndex(nx,y);
+      if (grid.elements[j] !== Element.EMPTY.id || grid.movedThisFrame[j]) break;
+      bestX = nx;
+      if (y < ROWS - 1) {
+        const below = j + COLS;
+        if (grid.elements[below] === Element.EMPTY.id && !grid.movedThisFrame[below]) {
+          moveCell(i, below); return;
+        }
+      }
+    }
+    if (bestX !== x) { moveCell(i, cellIndex(bestX,y)); return; }
+
+    // other side
+    bestX = x;
+    for (let s = 1; s <= spread; s++) {
+      const nx = x - dir * s;
+      if (!cellInBounds(nx, y)) break;
+      const j = cellIndex(nx,y);
+      if (grid.elements[j] !== Element.EMPTY.id || grid.movedThisFrame[j]) break;
+      bestX = nx;
+      if (y < ROWS - 1) {
+        const below = j + COLS;
+        if (grid.elements[below] === Element.EMPTY.id && !grid.movedThisFrame[below]) {
+          moveCell(i, below); return;
+        }
+      }
+    }
+    if (bestX !== x) { moveCell(i, cellIndex(bestX,y)); return; }
+
+    // single-cell swap fallback (e.g. oil floating on water)
+    tryMoveOrSwap(i, x + dir, y) || tryMoveOrSwap(i, x - dir, y);
+  }
+}
+
+function tryFall(i, x, y) {
+  // try down, then down-diag (random L/R first)
+  if (tryMoveOrSwap(i, x, y + 1)) return true;
+  const d = randChance(0.5) ? -1 : 1;
+  if (tryMoveOrSwap(i, x + d, y + 1)) return true;
+  // noinspection RedundantIfStatementJS
+  if (tryMoveOrSwap(i, x - d, y + 1)) return true;
+  return false;
+}
+
+function tryMoveOrSwap(i, nx, ny) {
+  // Hoist registry — called many times per moving cell per frame (water spread is brutal)
+  const ELEMENTS = Element.registry;
+  if (!cellInBounds(nx, ny)) return false;
+  const j = cellIndex(nx,ny);
+  if (grid.movedThisFrame[j]) return false;
+  const here = grid.elements[i], there = grid.elements[j];
+  if (there === Element.EMPTY.id) { moveCell(i, j); return true; }
+  // swap by density when both flowing
+  const a = ELEMENTS[here], b = ELEMENTS[there];
+  if (a.kind === "powder" || a.kind === "liquid") {
+    if ((b.kind === "liquid" || b.kind === "gas") && (a.density || 9) > (b.density || 0)) {
+      swapCells(i, j); return true;
+    }
+  }
+  if (a.kind === "gas") {
+    if ((b.kind === "liquid" || b.kind === "gas") && (b.density || 0) > (a.density || 0)) {
+      swapCells(i, j); return true;
+    }
+  }
+  // contact reactions — see Contact Reactions region for the table
+  const rxn = CONTACT_REACTIONS[here]?.[there];
+  if (rxn) {
+    if (typeof rxn === "function") return rxn(i, j);
+    const [resultHere, resultThere, prob] = rxn;
+    if (Math.random() < prob) {
+      grid.elements[i] = resultHere; grid.elements[j] = resultThere;
+      grid.movedThisFrame[i] = 1; grid.movedThisFrame[j] = 1;
+      return true;
+    }
+    return false;
+  }
+  return false;
+}
+//#endregion
+
+//#endregion
+
+
+//#region Rendering
+
+// Setup canvas and image data
+const canvas = document.getElementById("sim");
+canvas.width = COLS;
+canvas.height = ROWS;
+canvas.style.width  = WIDTH + "px";
+canvas.style.height = HEIGHT + "px";
+const ctx = canvas.getContext("2d");
+ctx.imageSmoothingEnabled = false;
+const imgData = ctx.createImageData(COLS, ROWS);
+const pix = imgData.data;
+// init alpha to 255
+for (let p = 3; p < pix.length; p += 4) pix[p] = 255;
+
+let heatView = false;
+function render() {
+  // Hoist registry — used once per cell to look up color + per-element render rules
+  const ELEMENTS = Element.registry;
+  const data = pix;
+  for (let i = 0, p = 0; i < GRID_SIZE; i++, p += 4) {
+    const eid = grid.elements[i];
+    let r, g, b;
+    if (heatView) {
+      // map temperature -50..1000 to a heatmap
+      const t = grid.temps[i];
+      const k = Math.max(0, Math.min(1, (t + 50) / 1100));
+      r = 255 * Math.min(1, k * 1.6);
+      g = 255 * Math.max(0, Math.min(1, k * 1.6 - 0.3));
+      b = 255 * Math.max(0, 0.6 - k);
+      if (eid === Element.EMPTY.id) { r *= 0.3; g *= 0.3; b *= 0.3; }
+    } else {
+      const element = ELEMENTS[eid];
+      const c = element.color;
+      r = c[0]; g = c[1]; b = c[2];
+
+      // per-element variations for visual life
+      if (element === Element.SAND || element === Element.STONE || element === Element.GUNPOWDER || element === Element.SALT) {
+        const j = (i * 9301 + 49297) & 31;
+        r += j - 16; g += (j - 16) * 0.7; b += (j - 16) * 0.4;
+      } else if (element === Element.WATER) {
+        // depth-aware tint: count up to 6 cells of water above for depth.
+        // surface = brighter cyan-blue; deep = saturated dark blue.
+        let depth = 0;
+        let k = i;
+        for (let d = 0; d < 6; d++) {
+          if (k < COLS) break;
+          k -= COLS;
+          if (grid.elements[k] === Element.WATER.id) depth++;
+          else break;
+        }
+        // depth 0 = surface, 6 = deep
+        const t01 = depth / 6;          // 0..1
+        const noise = ((i * 17 + frame) & 5);
+        // surface (light cyan-blue) → deep (rich dark blue)
+        r =  90 - t01 *  78 + noise;     // 90 → 12
+        g = 165 - t01 * 100 + noise;     // 165 → 65
+        b = 230 - t01 *  50 + noise;     // 230 → 180
+      } else if (element === Element.LAVA) {
+        const j = ((i + (frame >> 1)) * 17) & 31;
+        r += j - 8; g += (j - 16) * 0.6;
+      } else if (element === Element.FIRE) {
+        const k = (Math.random() * 60) | 0;
+        r = Math.min(255, 200 + k);
+        g = 80 + ((Math.random() * 100) | 0);
+        b = 20 + ((Math.random() * 40) | 0);
+      } else if (element === Element.SPARK) {
+        const k = (Math.random() * 60) | 0;
+        r = 255; g = 220 + k - 30; b = 100 + k;
+      } else if (element === Element.FUSE) {
+        if (grid.flags[i] === 1) {
+          // burning fuse — orange/red pulse based on remaining life
+          const k = (Math.random() * 50) | 0;
+          r = 240 + k - 25; g = 140 + k - 25; b = 30 + k - 25;
+        } else {
+          r = 180; g = 140; b = 80;
+        }
+      } else if (element === Element.EMBER) {
+        const k = (Math.random() * 40) | 0;
+        r = 255; g = 150 + k; b = 30 + (k >> 1);
+      } else if (element === Element.STORMGLASS) {
+        // pale crystal; pulses warmer as charge builds
+        const charge = Math.min(12, grid.flags[i] || 0);
+        const pulse = ((frame >> 1) + i) & 7;
+        r = 200 + charge * 4 + pulse;
+        g = 220 + (pulse >> 1);
+        b = 245 - charge * 8;
+      } else if (element === Element.MOLD) {
+        // fuzzy organic noise — varies per cell, slow pulse
+        const n = ((i * 91 + (frame >> 3)) & 31);
+        r = 90 + n; g = 130 + (n >> 1); b = 70 + (n >> 2);
+      } else if (element === Element.PLANT) {
+        const a = grid.flags[i] || 0;
+        r = 60 + a * 4;
+        g = 180 - a * 2;
+        b = 80;
+      } else if (element === Element.STEAM || element === Element.SMOKE) {
+        const k = ((grid.lifetimes[i] | 0) / 6) & 31;
+        r += k - 8; g += k - 8; b += k - 8;
+      } else if (element === Element.EMPTY) {
+        // subtle warm/cool tint via temperature, so heat is visible
+        const t = grid.temps[i];
+        if (t > 60) {
+          const k = Math.min(1, (t - 60) / 600);
+          r = 8 + k * 80; g = 6 + k * 20; b = 16;
+        } else if (t < 0) {
+          const k = Math.min(1, -t / 50);
+          r = 8; g = 6 + k * 20; b = 16 + k * 60;
+        }
+      }
+    }
+    data[p]   = r;
+    data[p+1] = g;
+    data[p+2] = b;
+  }
+  ctx.putImageData(imgData, 0, 0);
+
+  // additive glow pass for hot/lively cells (cheap: only loops once)
+  if (!heatView) {
+    ctx.globalCompositeOperation = "lighter";
+    for (let y = 0; y < ROWS; y++) {
+      for (let x = 0; x < COLS; x++) {
+        const i = cellIndex(x, y);
+        const eid = grid.elements[i];
+        if (eid === Element.FIRE.id) {
+          ctx.fillStyle = `rgba(255,140,40,0.35)`;
+          ctx.fillRect(x - 1, y - 1, 3, 3);
+        } else if (eid === Element.LAVA.id) {
+          ctx.fillStyle = `rgba(255,80,20,0.18)`;
+          ctx.fillRect(x - 1, y - 1, 3, 3);
+        } else if (eid === Element.SPARK.id) {
+          ctx.fillStyle = `rgba(255,240,140,0.6)`;
+          ctx.fillRect(x - 1, y - 1, 3, 3);
+        } else if (eid === Element.EMBER.id) {
+          ctx.fillStyle = `rgba(255,160,40,0.45)`;
+          ctx.fillRect(x - 1, y - 1, 3, 3);
+        } else if (eid === Element.FUSE.id && grid.flags[i] === 1) {
+          ctx.fillStyle = `rgba(255,140,40,0.4)`;
+          ctx.fillRect(x - 1, y - 1, 3, 3);
+        } else if (eid === Element.STORMGLASS.id && (grid.flags[i] || 0) > 0) {
+          const a = Math.min(0.55, (grid.flags[i] / 12) * 0.55);
+          ctx.fillStyle = `rgba(160,200,255,${a})`;
+          ctx.fillRect(x - 1, y - 1, 3, 3);
+        }
+      }
+    }
+    ctx.globalCompositeOperation = "source-over";
+  }
+
+  // brush preview
+  if (mouse.in) {
+    ctx.save();
+    ctx.strokeStyle = "rgba(255,255,255,0.7)";
+    ctx.lineWidth = 0.5;
+    ctx.beginPath();
+    ctx.arc(mouse.gx + 0.5, mouse.gy + 0.5, brushSize, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  }
+}
+
+//#endregion
+
+
+//#region Input
+
+const mouse = { x:0, y:0, gx:0, gy:0, in:false, btn:0 };
+let brushSize = 6;
+let currentEl = Element.SAND;
+let heatPen = 20;
+
+function paintAt(gx, gy, element, t) {
+  const r = brushSize;
+  for (let dy = -r; dy <= r; dy++) {
+    for (let dx = -r; dx <= r; dx++) {
+      if (dx*dx + dy*dy > r*r) continue;
+      const x = gx + dx, y = gy + dy;
+      if (!cellInBounds(x, y)) continue;
+      // gases/powders sparser fill so they don't oversaturate
+      if (element && (element.kind === "gas" || element.kind === "powder") && Math.random() > 0.55 && element !== Element.EMPTY) continue;
+      setCell(x, y, element, t);
+    }
+  }
+}
+
+canvas.addEventListener("contextmenu", ev => ev.preventDefault());
+canvas.addEventListener("mousedown", ev => {
+  mouse.btn = ev.button === 2 ? 2 : 1;
+  updateMouse(ev);
+  doPaint();
+});
+window.addEventListener("mouseup", () => { mouse.btn = 0; });
+canvas.addEventListener("mousemove", ev => {
+  updateMouse(ev);
+  if (mouse.btn) doPaint();
+});
+canvas.addEventListener("mouseenter", () => mouse.in = true);
+canvas.addEventListener("mouseleave", () => mouse.in = false);
+
+function updateMouse(ev) {
+  const r = canvas.getBoundingClientRect();
+  mouse.x = ev.clientX - r.left;
+  mouse.y = ev.clientY - r.top;
+  mouse.gx = (mouse.x / PX_PER_CELL) | 0;
+  mouse.gy = (mouse.y / PX_PER_CELL) | 0;
+}
+
+function doPaint() {
+  if (mouse.btn === 2) {
+    paintAt(mouse.gx, mouse.gy, Element.EMPTY);
+  } else {
+    paintAt(mouse.gx, mouse.gy, currentEl, currentEl.defaultTemp);
+  }
+  // apply heat pen for non-element heat injection if WALL is held with shift (skip)
+}
+
+//#endregion
+
+
+//#region UI Wiring
+
+const paletteEl = document.getElementById("palette");
+const buttons = {};
+
+// Order of Elements to list in the actual palette the user can use.
+const PALETTE_ORDER = [
+  Element.EMPTY, Element.WALL, Element.SAND, Element.WATER, Element.WOOD, Element.FIRE,
+  Element.LAVA, Element.STEAM, Element.ICE, Element.PLANT, Element.ACID, Element.GUNPOWDER,
+  Element.OIL, Element.STONE, Element.GLASS, Element.SPARK, Element.FUSE, Element.SALT,
+  Element.STORMGLASS, Element.MOLD
+];
+PALETTE_ORDER.forEach((element, idxOrder) => {
+  const b = document.createElement("button");
+  b.className = "pBtn";
+  b.dataset.eid = element.id;
+  b.title = element.name + (idxOrder < 9 ? `  [${idxOrder+1}]` : "");
+  const c = element.color;
+  b.innerHTML = `<span class="swatch" style="background:rgb(${c[0]},${c[1]},${c[2]})"></span><span>${element.name}</span>`;
+  b.addEventListener("click", () => selectElement(element));
+  paletteEl.appendChild(b);
+  buttons[element.id] = b;
+});
+
+function selectElement(element) {
+  currentEl = element;
+  for (const k in buttons) buttons[k].classList.toggle("active", +k === currentEl.id);
+}
+selectElement(Element.SAND);
+
+document.getElementById("brush").addEventListener("input", ev => {
+  brushSize = +ev.target.value;
+  document.getElementById("bsz").textContent = brushSize;
+});
+document.getElementById("heatPen").addEventListener("input", ev => {
+  heatPen = +ev.target.value;
+  document.getElementById("heatPenLbl").textContent = heatPen + "°";
+});
+
+let paused = false;
+document.getElementById("pause").addEventListener("click", () => { paused = !paused; });
+document.getElementById("clear").addEventListener("click", clearAll);
+document.getElementById("showHeat").addEventListener("click", () => heatView = !heatView);
+
+function clearAll() {
+  grid.elements.fill(Element.EMPTY.id);
+  grid.lifetimes.fill(0);
+  grid.flags.fill(0);
+  for (let i = 0; i < GRID_SIZE; i++) grid.temps[i] = 20;
+}
+
+window.addEventListener("keydown", ev => {
+  if (ev.key === " ") { paused = !paused; ev.preventDefault(); }
+  if (ev.key === "c" || ev.key === "C") clearAll();
+  if (ev.key === "h" || ev.key === "H") heatView = !heatView;
+  if (ev.key >= "1" && ev.key <= "9") {
+    const k = +ev.key - 1;
+    if (PALETTE_ORDER[k] !== undefined) selectElement(PALETTE_ORDER[k]);
+  }
+});
+
+//#endregion
+
+
+//#region Scenes
+// ---- preset scenes ---------------------------------------------------
+// Presets are designed against a 200×140 reference grid and scale to whatever
+// the actual COLS/ROWS are. SX/SY map reference coords to grid coords.
+const _RX = 200, _RY = 140;
+const SX = (x) => (x * COLS / _RX) | 0;
+const SY = (y) => (y * ROWS / _RY) | 0;
+function rect(x0, y0, x1, y1, element) { // TODO - you left off here m8
+  for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) setCell(x, y, element);
+}
+function R(x0, y0, x1, y1, element) {
+  rect(SX(x0), SY(y0), SX(x1), SY(y1), element);
+}
+function S(x, y, element) { setCell(SX(x), SY(y), element); }
+
+
+// noinspection JSUnusedGlobalSymbols
+const SCENES = {
+  volcano() {
+    clearAll();
+    R(0, 130, _RX, _RY, Element.STONE);
+    // cone: narrow at top (y=60) widening downward (y=130)
+    const cx = SX(100);
+    const yTop = SY(60), yBot = SY(130);
+    const wScale = (COLS / _RX);
+    for (let y = yTop; y < yBot; y++) {
+      const refDy = (y - yTop) / (yBot - yTop) * 70;  // 0..70 in reference
+      const outerHalf = ((8 + refDy * 0.7) * wScale) | 0;
+      const innerHalf = Math.max(0, outerHalf - (6 * wScale) | 0);
+      for (let x = cx - outerHalf; x <= cx + outerHalf; x++) {
+        const dist = Math.abs(x - cx);
+        if (dist > innerHalf) setCell(x, y, Element.STONE);
+      }
+    }
+    // lava chamber inside the cone (lower portion only)
+    const yLavaTop = SY(95);
+    for (let y = yLavaTop; y < yBot; y++) {
+      const refDy = (y - yTop) / (yBot - yTop) * 70;
+      const outerHalf = ((8 + refDy * 0.7) * wScale) | 0;
+      const innerHalf = Math.max(0, outerHalf - (6 * wScale) | 0);
+      for (let x = cx - innerHalf; x < cx + innerHalf; x++) setCell(x, y, Element.LAVA);
+    }
+    R(155, 30, 195, 60, Element.WATER);
+    R(150, 60, 200, 64, Element.WALL);
+    R(135, 64, 150, 67, Element.WOOD);
+  },
+  aquarium() {
+    clearAll();
+    R(20, 30, 180, 35, Element.GLASS);
+    R(20, 30, 25, 130, Element.GLASS);
+    R(175, 30, 180, 130, Element.GLASS);
+    R(20, 125, 180, 130, Element.GLASS);
+    R(25, 110, 175, 125, Element.SAND);
+    R(25, 50, 175, 110, Element.WATER);
+    for (let rx = 40; rx < 160; rx += 14) S(rx, 109, Element.PLANT);
+  },
+  demolition() {
+    clearAll();
+    R(0, 130, _RX, _RY, Element.WALL);
+    R(20, 110, 35, 128, Element.GUNPOWDER);
+    R(80, 110, 95, 128, Element.GUNPOWDER);
+    R(150, 110, 165, 128, Element.GUNPOWDER);
+    R(180, 90,  195, 128, Element.GUNPOWDER);
+    for (let rx = 36; rx < 80; rx++)  S(rx, 109, Element.FUSE);
+    for (let rx = 96; rx < 150; rx++) S(rx, 109, Element.FUSE);
+    for (let rx = 166; rx < 180; rx++) S(rx, 109, Element.FUSE);
+    for (let ry = 100; ry < 109; ry++) S(35, ry, Element.FUSE);
+    R(60, 90, 130, 100, Element.WOOD);
+  },
+  storm() {
+    clearAll();
+    R(0, 130, _RX, _RY, Element.WALL);
+    R(30, 55, 35, 130, Element.GLASS);
+    R(165, 55, 170, 130, Element.GLASS);
+    R(30, 125, 170, 130, Element.GLASS);
+    R(35, 65, 165, 125, Element.WATER);
+    S(60, 80, Element.STORMGLASS);
+    S(140, 90, Element.STORMGLASS);
+    S(100, 110, Element.STORMGLASS);
+    S(100, 64, Element.STORMGLASS);
+    S(100, 63, Element.SPARK);
+    S(101, 63, Element.SPARK);
+    S(99, 63, Element.SPARK);
+  },
+  winter() {
+    clearAll();
+    R(0, 90, _RX, 100, Element.ICE);
+    R(0, 100, _RX, 130, Element.WATER);
+    R(0, 125, _RX, _RY, Element.SAND);
+    for (let rx = 10; rx < _RX; rx += 22) {
+      R(rx, 80, rx + 8, 90, Element.ICE);
+    }
+    R(160, 120, 175, 124, Element.WOOD);
+    S(167, 119, Element.FIRE);
+    S(168, 119, Element.FIRE);
+  }
+};
+document.querySelectorAll("[data-scene]").forEach(b => {
+  b.addEventListener("click", () => SCENES[b.dataset.scene]());
+});
+//#endregion
+
+
+//#region Main Loop
+// ---- main loop -------------------------------------------------------
+const fpsEl = document.getElementById("fps");
+const activeEl = document.getElementById("active");
+const statsEl = document.getElementById("stats");
+let lastFpsT = performance.now(), framesSince = 0, lastFps = 0;
+
+function loop() {
+  if (!paused) step();
+  render();
+  framesSince++;
+  const now = performance.now();
+  if (now - lastFpsT > 500) {
+    lastFps = (framesSince * 1000 / (now - lastFpsT)) | 0;
+    fpsEl.textContent = lastFps;
+    framesSince = 0;
+    lastFpsT = now;
+    let act = 0;
+    for (let i = 0; i < GRID_SIZE; i++) if (grid.elements[i] !== Element.EMPTY.id) act++;
+    activeEl.textContent = act;
+    statsEl.textContent = `cells: ${COLS}×${ROWS}=${GRID_SIZE}\nactive: ${act}\nfps: ${lastFps}`;
+  }
+  requestAnimationFrame(loop);
+}
+
+// seed a little pile so it's not empty on load (scales with grid size)
+(function seed() {
+  R(60, 110, 90, 116, Element.WOOD);   // wood log
+  R(100, 90, 130, 100, Element.SAND);  // sand pile
+  R(140, 130, 170, 138, Element.LAVA); // lava pool
+  R(30, 80, 35, 130, Element.WALL);    // stone tower
+})();
+
+loop();
+//#endregion
+
+</script>
+</body>
+</html>
+
+
