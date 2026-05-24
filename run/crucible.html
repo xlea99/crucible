@@ -487,28 +487,28 @@ function cellInBounds(x, y) {
  * Sets the cell at position (x,y) to a given element, with optional temperature override.
  * @param {number} x - column, 0 to COLS-1
  * @param {number} y - row, 0 to ROWS-1
- * @param {number} eid - the element ID to write (e.g. E_WATER)
+ * @param {number} element - the element ID to write (e.g. E_WATER)
  * @param {number} [temperature] - optional temperature override; defaults to DEFAULT_TEMP[eid]
  */
-function setCell(x, y, eid, temperature) {
+function setCell(x, y, element, temperature) {
   // Return on bad coordinates
   if (!cellInBounds(x, y)) return;
 
   // Write the element ID
   const i = cellIndex(x, y);
-  grid.elements[i] = eid;
+  grid.elements[i] = element;
 
   // Set to the provided temperature if given, otherwise this element's default
   if (temperature !== undefined) {
     grid.temps[i] = temperature;
   }
   else {
-    grid.temps[i] = DEFAULT_TEMP[eid];
+    grid.temps[i] = DEFAULT_TEMP[element];
   }
 
   // If this element has a lifetime, seed it with a small random offset for visual variety.
   // LIFETIME[eid] is 0 for elements that don't decay, which naturally falls through to 0 here.
-  const baseLifetime = LIFETIME[eid];
+  const baseLifetime = LIFETIME[element];
   if (baseLifetime > 0) {
     grid.lifetimes[i] = baseLifetime + randInt(20);
   }
