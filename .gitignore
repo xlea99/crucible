@@ -1,0 +1,7 @@
+# Local-only scratch / scaffolding — kept on disk but never pushed
+chatting.txt
+old/
+run/sound_lab.html
+run/sneaky.html
+/.*
+/workspace
