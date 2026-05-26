@@ -676,6 +676,8 @@ function diffuseHeat() {
   }
 }
 
+//#region Reactions & Helpers
+
 /**
  * The major driver of element interactions. All state changes and contact reactions (NOT collision reactions)
  * happen in this hot loop. First, generic data driver reactions like ignition from flame happen, then element-specific
@@ -703,7 +705,6 @@ function tickCells() {
 
     // === Now handle element-specific effects. ===
     switch (thisElement) {
-
 
       // Evaporation to STEAM and freezing to ICE.
       case E_WATER:
@@ -740,28 +741,63 @@ function tickCells() {
 
       // Quenching on water contact, self-heating, and cooling down enough to harden to STONE
       case E_LAVA: {
-        // Quench: if any cardinal neighbour is water, react on contact — lava becomes STONE,
-        // the water becomes STEAM, and nearby lava crusts (see lavaWaterReaction).
-        // This is an ADJACENCY reaction (fires whenever lava touches water), relocated here from
-        // the old collision-triggered COLLISION_REACTIONS table — lava+water should react on
-        // contact, not only when one physically moves into the other.
         const cx = cellX(i), cy = cellY(i);
+
+        // Quench: find an adjacent (cardinal) water cell. Lava touching water reacts on contact —
+        // this lava cell becomes STONE, the water becomes STEAM, and nearby lava crusts over.
+        // ADJACENCY reaction (fires whenever lava touches water, settled or not); relocated from
+        // the old collision-triggered COLLISION_REACTIONS table.
         const dirs = [[0, -1], [0, 1], [-1, 0], [1, 0]];   // up, down, left, right
+        let waterI = -1;
         for (const [dx, dy] of dirs) {
           const nx = cx + dx, ny = cy + dy;
           if (!cellInBounds(nx, ny)) continue;
           const k = cellIndex(nx, ny);
-          if (grid.elements[k] === E_WATER) {
-            lavaWaterReaction(i, k);
-            break;   // breaks the neighbor scan; cell i is STONE now
-          }
-        }
-        // If the quench above turned us to stone, we're done this tick.
-        if (grid.elements[i] !== E_LAVA) {
-          break;
+          if (grid.elements[k] === E_WATER) { waterI = k; break; }
         }
 
-        // Otherwise, normal lava behavior:
+        if (waterI !== -1) {
+          // React: this lava → STONE, the contacted water → STEAM.
+          grid.elements[i] = E_STONE;      grid.temps[i] = 380;        grid.lifetimes[i] = 0;
+          grid.elements[waterI] = E_STEAM; grid.temps[waterI] = 150;   grid.lifetimes[waterI] = 800 + randInt(400);
+          grid.movedThisFrame[i] = 1;      grid.movedThisFrame[waterI] = 1;
+
+          // Crust nearby lava — quench radius 2 with falloff, so a sea pour makes a thick crust.
+          for (let dy = -2; dy <= 2; dy++) {
+            for (let dx = -2; dx <= 2; dx++) {
+              if (!dx && !dy) continue;
+              const nx = cx + dx, ny = cy + dy;
+              if (!cellInBounds(nx, ny)) continue;
+              const k = cellIndex(nx, ny);
+              if (grid.elements[k] === E_LAVA) {
+                const dist = Math.abs(dx) + Math.abs(dy);
+                const p = dist === 1 ? 0.55 : dist === 2 ? 0.22 : 0.08;
+                if (Math.random() < p) {
+                  grid.elements[k] = E_STONE; grid.temps[k] = 360; grid.lifetimes[k] = 0; grid.movedThisFrame[k] = 1;
+                } else {
+                  grid.temps[k] -= 30;   // cool the rest a bit
+                }
+              }
+            }
+          }
+
+          // Burst extra steam above the water contact point if there's room.
+          const wx = cellX(waterI), wy = cellY(waterI);
+          for (let dy = -2; dy <= 0; dy++) {
+            for (let dx = -1; dx <= 1; dx++) {
+              if (dx === 0 && dy === 0) continue;
+              const nx = wx + dx, ny = wy + dy;
+              if (!cellInBounds(nx, ny)) continue;
+              const k = cellIndex(nx, ny);
+              if (grid.elements[k] === E_EMPTY && Math.random() < 0.45) {
+                grid.elements[k] = E_STEAM; grid.temps[k] = 140; grid.lifetimes[k] = 600 + randInt(400); grid.movedThisFrame[k] = 1;
+              }
+            }
+          }
+          break;   // quenched into stone — done this tick
+        }
+
+        // No water contact — normal lava behavior:
         // Lava self-heats slightly
         if (temp < 600) {
           grid.temps[i] = 600;
@@ -916,7 +952,35 @@ function tickCells() {
 
       // Growing when near water
       case E_PLANT: {
-        plantGrow(i);
+        // Grow toward adjacent empty cells if water nearby; slow rate
+        if (!randChance(0.02)) continue;
+        if ((grid.flags[i] || 0) > 14) continue;  // age cap so plants don't fill the world
+        const x = cellX(i), y = cellY(i);
+        // Find water neighbor within radius 2
+        let hasWater = false;
+        for (let dy = -2; dy <= 2 && !hasWater; dy++) {
+          for (let dx = -2; dx <= 2 && !hasWater; dx++) {
+            const xx = x + dx, yy = y + dy;
+            if (!cellInBounds(xx, yy)) continue;
+            if (grid.elements[cellIndex(xx,yy)] === E_WATER) hasWater = true;
+          }
+        }
+        if (!hasWater) continue;
+        // Sprout into a random empty neighbor, prefer up
+        const dirs = [[0,-1],[0,-1],[-1,-1],[1,-1],[-1,0],[1,0]];
+        for (let k = 0; k < 4; k++) {
+          const d = dirs[randInt(dirs.length)];
+          const xx = x + d[0], yy = y + d[1];
+          if (!cellInBounds(xx, yy)) continue;
+          const j = cellIndex(xx,yy);
+          if (grid.elements[j] === E_EMPTY || grid.elements[j] === E_WATER) {
+            grid.elements[j] = E_PLANT; grid.temps[j] = 20; grid.flags[j] = (grid.flags[i] || 0) + 1;
+            if ((grid.flags[j] || 0) > 18) {
+              grid.flags[j] = 18;   // age cap
+            }
+            break;
+          }
+        }
         break;
       }
 
@@ -1082,38 +1146,7 @@ function tickCells() {
   }
 }
 
-//#region Reaction Helpers
-
-function plantGrow(i) {
-  // grow toward adjacent empty cells if water nearby; slow rate
-  if (!randChance(0.02)) return;
-  if ((grid.flags[i] || 0) > 14) return;  // age cap so plants don't fill the world
-  const x = cellX(i), y = cellY(i);
-  // find water neighbour within radius 2
-  let hasWater = false;
-  for (let dy = -2; dy <= 2 && !hasWater; dy++) {
-    for (let dx = -2; dx <= 2 && !hasWater; dx++) {
-      const xx = x + dx, yy = y + dy;
-      if (!cellInBounds(xx, yy)) continue;
-      if (grid.elements[cellIndex(xx,yy)] === E_WATER) hasWater = true;
-    }
-  }
-  if (!hasWater) return;
-  // sprout into a random empty neighbor, prefer up
-  const dirs = [[0,-1],[0,-1],[-1,-1],[1,-1],[-1,0],[1,0]];
-  for (let k = 0; k < 4; k++) {
-    const d = dirs[randInt(dirs.length)];
-    const xx = x + d[0], yy = y + d[1];
-    if (!cellInBounds(xx, yy)) continue;
-    const j = cellIndex(xx,yy);
-    if (grid.elements[j] === E_EMPTY || grid.elements[j] === E_WATER) {
-      grid.elements[j] = E_PLANT; grid.temps[j] = 20; grid.flags[j] = (grid.flags[i] || 0) + 1;
-      if ((grid.flags[j] || 0) > 18) grid.flags[j] = 18;  // age cap
-      return;
-    }
-  }
-}
-
+// Helpers
 function igniteNeighbours(x, y) {
   for (let dy = -1; dy <= 1; dy++) {
     for (let dx = -1; dx <= 1; dx++) {
@@ -1135,55 +1168,7 @@ function igniteNeighbours(x, y) {
   }
 }
 
-
-// Reactions that fire when one moving cell tries to enter another non-empty cell.
-// Looked up by [movingElement][destinationElement] inside tryMoveOrSwap.
-//
-// Tuple form:    [resultHere, resultThere, probability] — applied on probability roll, returns true.
-// Function form: handler(i, j) does its own mutations and returns true to consume the move.
-function lavaWaterReaction(i, j) {
-  const here = grid.elements[i];
-  const lavaI = here === E_LAVA ? i : j;
-  const waterI = here === E_WATER ? i : j;
-  grid.elements[lavaI] = E_STONE; grid.temps[lavaI] = 380; grid.lifetimes[lavaI] = 0;
-  grid.elements[waterI] = E_STEAM; grid.lifetimes[waterI] = 800 + randInt(400); grid.temps[waterI] = 150;
-  grid.movedThisFrame[lavaI] = 1; grid.movedThisFrame[waterI] = 1;
-
-  // crust nearby lava — quench radius 2 with falloff, so a sea pour creates a thick crust
-  const lx = cellX(lavaI), ly = cellY(lavaI);
-  for (let dy = -2; dy <= 2; dy++) {
-    for (let dx = -2; dx <= 2; dx++) {
-      if (!dx && !dy) continue;
-      const nx = lx + dx, ny = ly + dy;
-      if (!cellInBounds(nx, ny)) continue;
-      const k = cellIndex(nx,ny);
-      if (grid.elements[k] === E_LAVA) {
-        const dist = Math.abs(dx) + Math.abs(dy);
-        const p = dist === 1 ? 0.55 : dist === 2 ? 0.22 : 0.08;
-        if (Math.random() < p) {
-          grid.elements[k] = E_STONE; grid.temps[k] = 360; grid.lifetimes[k] = 0; grid.movedThisFrame[k] = 1;
-        } else {
-          grid.temps[k] -= 30;  // cool the rest a bit
-        }
-      }
-    }
-  }
-  // burst extra steam above the contact point if there's room
-  const wx = cellX(waterI), wy = cellY(waterI);
-  for (let dy = -2; dy <= 0; dy++) {
-    for (let dx = -1; dx <= 1; dx++) {
-      const nx = wx + dx, ny = wy + dy;
-      if (!cellInBounds(nx, ny) || (dx === 0 && dy === 0)) continue;
-      const k = cellIndex(nx,ny);
-      if (grid.elements[k] === E_EMPTY && Math.random() < 0.45) {
-        grid.elements[k] = E_STEAM; grid.lifetimes[k] = 600 + randInt(400); grid.temps[k] = 140; grid.movedThisFrame[k] = 1;
-      }
-    }
-  }
-  return true;
-}
-
-//#endregion
+//#endregion Reactions & Helpers
 
 
 //endregion === Engine ===
@@ -1199,12 +1184,12 @@ function lavaWaterReaction(i, j) {
 
 
 // Currently NO collision reactions exist, but the system is wired. These are very specific - ONLY when a cell of one
-// element tires to move into the cell contained by a specific other element. Most reactions should us tickCell, but
-// some make sense for movement, like possibly dynamite in the future. Presering the old lava/water reaction just
-// to show syntax.
+// element tries to move into the cell contained by a specific other element (impact-triggered, NOT mere adjacency —
+// adjacency reactions like lava+water belong in tickCells). Some interactions only make sense on movement, like
+// dynamite detonating on impact down the line.
+// Syntax — table of [movingElement]: { [destElement]: handler(i, j) }, e.g.:
+//   [E_DYNAMITE]: { [E_WALL]: dynamiteOnImpact },
 const COLLISION_REACTIONS = {
-  //[E_LAVA]:  { [E_WATER]: lavaWaterReaction },
-  //[E_WATER]: { [E_LAVA]:  lavaWaterReaction },
 };
 
 
