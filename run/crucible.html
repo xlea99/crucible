@@ -175,7 +175,6 @@
       <button class="act" data-scene="aquarium">Aquarium</button>
       <button class="act" data-scene="demolition">Demolition</button>
       <button class="act" data-scene="winter">Winter Pond</button>
-      <button class="act" data-scene="storm">Lightning Lab</button>
     </div>
 
     <div class="sub">Tips</div>
@@ -328,17 +327,16 @@ const E_SPARK      = 16;
 const E_FUSE       = 17;
 const E_EMBER      = 18;
 const E_SALT       = 19;
-const E_STORMGLASS = 20;
-const E_MOLD       = 21;
+const E_MOLD       = 20;
 // Always the next valid id
-const N_ELEMENTS = 22;
+const N_ELEMENTS = 21;
 //endregion === Element IDs ===
 
 //region === Element definitions ===
 
 // List both allowed AND required keys (required subset of allowed obviously)
-const ALLOWED_KEYS  = new Set(['name','kind','color','defaultTemp','density','spread','lifetime','ignitionChance','burnTemp','detonateAtTemp','thermalMass']);
-const REQUIRED_KEYS = ['name', 'kind', 'color', 'defaultTemp'];
+const ALLOWED_KEYS  = new Set(['id','name','kind','color','defaultTemp','density','spread','lifetime','ignitionChance','burnTemp','detonateAtTemp','thermalMass']);
+const REQUIRED_KEYS = ['id','name', 'kind', 'color', 'defaultTemp'];
 
 // One row per element. Position MUST MATCH element ID. To add a new element:
 //   1. Add an `E_FLOUNDER` constant above (next sequential integer)
@@ -346,32 +344,37 @@ const REQUIRED_KEYS = ['name', 'kind', 'color', 'defaultTemp'];
 //   3. Add a row here in the matching position
 // The startup validation will catch mismatches.
 const ELEMENT_DEFS = [
-  /*  0 EMPTY      */ { name: 'Eraser',     kind: KIND_EMPTY,  color: '#080610', defaultTemp:  20 },
-  /*  1 WALL       */ { name: 'Wall',       kind: KIND_STATIC, color: '#78768C', defaultTemp:  20, thermalMass: 10 },
-  /*  2 SAND       */ { name: 'Sand',       kind: KIND_POWDER, color: '#E0C171', defaultTemp:  20, density: 4 },
-  /*  3 WATER      */ { name: 'Water',      kind: KIND_LIQUID, color: '#447CDE', defaultTemp:  20, density: 2, spread: 6 },
-  /*  4 WOOD       */ { name: 'Wood',       kind: KIND_STATIC, color: '#6E4628', defaultTemp:  20, ignitionChance: 0.012, burnTemp: 220 },
-  /*  5 FIRE       */ { name: 'Fire',       kind: KIND_GAS,    color: '#FF8C28', defaultTemp: 540, lifetime: 60 },
-  /*  6 LAVA       */ { name: 'Lava',       kind: KIND_LIQUID, color: '#E6461E', defaultTemp: 700, density: 6, spread: 1 },
-  /*  7 STEAM      */ { name: 'Steam',      kind: KIND_GAS,    color: '#B4C8DC', defaultTemp: 130, lifetime: 600 },
-  /*  8 ICE        */ { name: 'Ice',        kind: KIND_STATIC, color: '#AAD2EB', defaultTemp: -10, thermalMass: 24 },
-  /*  9 STONE      */ { name: 'Stone',      kind: KIND_POWDER, color: '#645A5A', defaultTemp:  30, density: 5,  thermalMass:  8 },
-  /* 10 GLASS      */ { name: 'Glass',      kind: KIND_STATIC, color: '#A0D2DC', defaultTemp:  40, thermalMass: 10 },
-  /* 11 PLANT      */ { name: 'Plant',      kind: KIND_STATIC, color: '#50C864', defaultTemp:  20, ignitionChance: 0.02, burnTemp: 180 },
-  /* 12 ACID       */ { name: 'Acid',       kind: KIND_LIQUID, color: '#B4FF50', defaultTemp:  20, density: 2, spread: 3 },
-  /* 13 GUNPOWDER  */ { name: 'Gunpowder',  kind: KIND_POWDER, color: '#3C3C3C', defaultTemp:  20, density: 4, detonateAtTemp: 200 },
-  /* 14 SMOKE      */ { name: 'Smoke',      kind: KIND_GAS,    color: '#3C3C48', defaultTemp:  80, lifetime: 200 },
-  /* 15 OIL        */ { name: 'Oil',        kind: KIND_LIQUID, color: '#502850', defaultTemp:  20, density: 1, spread: 4, ignitionChance: 0.05, burnTemp: 130 },
-  /* 16 SPARK      */ { name: 'Spark',      kind: KIND_GAS,    color: '#FFFFA0', defaultTemp: 600, lifetime: 8 },
-  /* 17 FUSE       */ { name: 'Fuse',       kind: KIND_STATIC, color: '#B48C50', defaultTemp:  20 },
-  /* 18 EMBER      */ { name: 'Ember',      kind: KIND_GAS,    color: '#FFAA3C', defaultTemp: 400, lifetime: 24 },
-  /* 19 SALT       */ { name: 'Salt',       kind: KIND_POWDER, color: '#E6E6EB', defaultTemp:  20, density: 4 },
-  /* 20 STORMGLASS */ { name: 'Stormglass', kind: KIND_STATIC, color: '#C8DCF0', defaultTemp:  20 },
-  /* 21 MOLD       */ { name: 'Mold',       kind: KIND_STATIC, color: '#6E8C50', defaultTemp:  20 },
+  { id: E_EMPTY,      name: 'Eraser',     kind: KIND_EMPTY,  color: '#080610', defaultTemp:  20 },
+  { id: E_WALL,       name: 'Wall',       kind: KIND_STATIC, color: '#78768C', defaultTemp:  20, thermalMass: 10 },
+  { id: E_SAND,       name: 'Sand',       kind: KIND_POWDER, color: '#E0C171', defaultTemp:  20, density: 4 },
+  { id: E_WATER,      name: 'Water',      kind: KIND_LIQUID, color: '#447CDE', defaultTemp:  20, density: 2, spread: 6 },
+  { id: E_WOOD,       name: 'Wood',       kind: KIND_STATIC, color: '#6E4628', defaultTemp:  20, ignitionChance: 0.012, burnTemp: 220 },
+  { id: E_FIRE,       name: 'Fire',       kind: KIND_GAS,    color: '#FF8C28', defaultTemp: 540, lifetime: 60 },
+  { id: E_LAVA,       name: 'Lava',       kind: KIND_LIQUID, color: '#E6461E', defaultTemp: 700, density: 6, spread: 1 },
+  { id: E_STEAM,      name: 'Steam',      kind: KIND_GAS,    color: '#B4C8DC', defaultTemp: 130, lifetime: 600 },
+  { id: E_ICE,        name: 'Ice',        kind: KIND_STATIC, color: '#AAD2EB', defaultTemp: -10, thermalMass: 24 },
+  { id: E_STONE,      name: 'Stone',      kind: KIND_POWDER, color: '#645A5A', defaultTemp:  30, density: 5,  thermalMass:  8 },
+  { id: E_GLASS,      name: 'Glass',      kind: KIND_STATIC, color: '#A0D2DC', defaultTemp:  40, thermalMass: 10 },
+  { id: E_PLANT,      name: 'Plant',      kind: KIND_STATIC, color: '#50C864', defaultTemp:  20, ignitionChance: 0.02, burnTemp: 180 },
+  { id: E_ACID,       name: 'Acid',       kind: KIND_LIQUID, color: '#B4FF50', defaultTemp:  20, density: 2, spread: 3 },
+  { id: E_GUNPOWDER,  name: 'Gunpowder',  kind: KIND_POWDER, color: '#3C3C3C', defaultTemp:  20, density: 4, detonateAtTemp: 200 },
+  { id: E_SMOKE,      name: 'Smoke',      kind: KIND_GAS,    color: '#3C3C48', defaultTemp:  80, lifetime: 200 },
+  { id: E_OIL,        name: 'Oil',        kind: KIND_LIQUID, color: '#502850', defaultTemp:  20, density: 1, spread: 4, ignitionChance: 0.05, burnTemp: 130 },
+  { id: E_SPARK,      name: 'Spark',      kind: KIND_GAS,    color: '#FFFFA0', defaultTemp: 600, lifetime: 8 },
+  { id: E_FUSE,       name: 'Fuse',       kind: KIND_STATIC, color: '#B48C50', defaultTemp:  20 },
+  { id: E_EMBER,      name: 'Ember',      kind: KIND_GAS,    color: '#FFAA3C', defaultTemp: 400, lifetime: 24 },
+  { id: E_SALT,       name: 'Salt',       kind: KIND_POWDER, color: '#E6E6EB', defaultTemp:  20, density: 4 },
+  { id: E_MOLD,       name: 'Mold',       kind: KIND_STATIC, color: '#6E8C50', defaultTemp:  20 },
 ];
 // Sanity check to catch a missed N_ELEMENTS bump or a duplicate/missing row
 if (ELEMENT_DEFS.length !== N_ELEMENTS) {
   throw new Error(`ELEMENT_DEFS has ${ELEMENT_DEFS.length} entries but N_ELEMENTS is ${N_ELEMENTS}`);
+}
+// Also check for misaligned ELEMENT_DEFS element
+for (let i = 0; i < ELEMENT_DEFS.length; i++) {
+  if (ELEMENT_DEFS[i].id !== i) {
+    throw new Error(`Element '${name}' has id ${ELEMENT_DEFS[i].id} but sits at position ${i}. The constant and its row position disagree!!`);
+  }
 }
 
 //endregion === Element definitions ===
@@ -580,8 +583,6 @@ function swapCells(i, j) {
 
 
 
-
-
 //region === Engine ===
 
 let frame = 0;
@@ -592,12 +593,11 @@ function step() {
   // Since we are now on a new frame, ALL cells are initially considered to have not yet moved this frame.
   grid.movedThisFrame.fill(0);
 
-  // 1) Heat diffusion — simple averaging with neighbours.
-  //    Done as a separate pass so order doesn't bias temperatures.
+  // 1) Heat diffusion: simple averaging with neighbors. Done as a separate pass so order doesn't bias temperatures.
   diffuseHeat();
 
-  // 2) Reactions — temperature-driven phase changes & burning.
-  reactions();
+  // 2) Tick cells: environment/state driven changes to individual cells before reactions
+  tickCells();
 
   // 3) Movement — bottom-up, with alternating L/R scan to avoid bias.
   const leftFirst = (frame & 1) === 0;
@@ -610,11 +610,13 @@ function step() {
   }
 }
 
-// We sample each cell's neighbors and pull a fraction of their temp toward
-// ours. Use the previous-frame temps via copy to avoid order bias.
+/**
+ * We sample each cell's neighbors and pull a fraction of their temp toward
+ * ours. Use the previous-frame temps via copy to avoid order bias.
+ */
 function diffuseHeat() {
-  // TODO: HEAT SYSTEM OVERHAUL (weekend deep dive)
-  // The current heat system is data-driven on these three ElementMeta
+  // TODO: HEAT SYSTEM OVERHAUL (deep dive)
+  // The current heat system is data-driven on these three
   // properties, but the underlying physics is approximate:
   //   - No real latent heat at phase transitions (water→steam just happens at 100°)
   //   - No proper convection — hot cells carry their heat by rising, but the
@@ -632,12 +634,12 @@ function diffuseHeat() {
   for (let y = 0; y < ROWS; y++) {
     for (let x = 0; x < COLS; x++) {
       const i = cellIndex(x, y);
-      const eid = grid.elements[i];
+      const thisElement = grid.elements[i];
 
       // Thermal mass — how strongly a cell resists temperature change. Higher means
       // the cell's own temperature dominates the neighbour-average. ICE=24 (very
       // resistant, persists in warm air), STONE=8, WALL/GLASS=10, default=4.
-      const selfW = THERMAL_MASS[eid];
+      const selfW = THERMAL_MASS[thisElement];
 
       let sum = grid.tempsBuffer[i] * selfW;
       let n = selfW;
@@ -659,95 +661,199 @@ function diffuseHeat() {
       }
 
       let avg = sum / n;
-      // ambient bleed — different elements equilibrate toward different temps
-      if (eid === E_EMPTY) {
+      // ambient bleed, different elements equilibrate toward different temps
+      if (thisElement === E_EMPTY) {
         avg = avg * 0.90 + 20 * 0.10;            // air cools fast to 20
-      } else if (eid === E_WATER) {
+      } else if (thisElement === E_WATER) {
         avg = avg * 0.97 + 20 * 0.03;            // water bleeds slowly to 20
-      } else if (eid === E_ICE) {
+      } else if (thisElement === E_ICE) {
         avg = avg * 0.85 + (-10) * 0.15;          // ice actively maintains coldness
-      } else if (eid === E_STEAM || eid === E_SMOKE) {
+      } else if (thisElement === E_STEAM || thisElement === E_SMOKE) {
         avg = grid.tempsBuffer[i] * 0.7 + avg * 0.3;       // gases hold heat, no ambient bleed
       }
       grid.temps[i] = avg | 0;
     }
   }
 }
-//endregion === Engine ===
 
-
-
-
-//#region Simulation
-
-//#region Step Orchestrator
-
-//#endregion
-
-//#region Heat Diffusion
-
-//#endregion
-
-//#region Reactions
-function reactions() {
+/**
+ * The major driver of element interactions. All state changes and contact reactions (NOT collision reactions)
+ * happen in this hot loop. First, generic data driver reactions like ignition from flame happen, then element-specific
+ * things happen.
+ */
+function tickCells() {
   for (let i = 0; i < GRID_SIZE; i++) {
-    const eid = grid.elements[i];
-    if (eid === E_EMPTY) continue;
-    const t = grid.temps[i];
+    const thisElement = grid.elements[i];
+    // Nothing to tick if this cell is empty.
+    if (thisElement === E_EMPTY) continue;
 
-    switch (eid) {
+    // Get any needed attributes of this cell.
+    const temp = grid.temps[i];
 
+    //region === Generic data-driven properties get handled first ===
+
+    // Ignition/flammability
+    if (IGNITION_CHANCE[thisElement] > 0 && temp >= BURN_TEMP[thisElement] && randChance(IGNITION_CHANCE[thisElement])) {
+      grid.elements[i] = E_FIRE;
+      grid.lifetimes[i] = LIFETIME[E_FIRE] + randInt(60)
+      grid.temps[i] = 500;
+      continue;
+    }
+    //endregion
+
+    // === Now handle element-specific effects. ===
+    switch (thisElement) {
+
+
+      // Evaporation to STEAM and freezing to ICE.
       case E_WATER:
-        if (t >= 100)        { grid.elements[i] = E_STEAM;  grid.lifetimes[i] = 700 + randInt(300); grid.temps[i] = 130; }
-        else if (t <= -2)    { grid.elements[i] = E_ICE; }
+        // Evaporation
+        if (temp >= 100) {
+          grid.elements[i] = E_STEAM;
+          grid.lifetimes[i] = 700 + randInt(300);
+          grid.temps[i] = 130;
+        }
+        // Freezing
+        else if (temp <= -2) {
+          grid.elements[i] = E_ICE;
+        }
         break;
+      // Precipitation to WATER, and dissipates to nothing.
       case E_STEAM:
-        if (t < 60)          { grid.elements[i] = E_WATER; grid.lifetimes[i] = 0; grid.temps[i] = 50; }
-        else if (--grid.lifetimes[i] <= 0) { clearCell(i); }
+        // Precipitation
+        if (temp < 60) {
+          grid.elements[i] = E_WATER;
+          grid.lifetimes[i] = 0;
+          grid.temps[i] = 50;
+        }
+        // Dissipation
+        else if (--grid.lifetimes[i] <= 0) {
+          clearCell(i);
+        }
         break;
+      // Melting to WATER.
       case E_ICE:
-        if (t >= 1)          { grid.elements[i] = E_WATER; }
+        if (temp >= 1) {
+          grid.elements[i] = E_WATER;
+        }
         break;
 
-      case E_LAVA:
-        if (t < 600) grid.temps[i] = 600;  // lava self-heats slightly
-        if (t < 480)         { grid.elements[i] = E_STONE; grid.temps[i] = 460; }
-        break;
-      case E_STONE:
-        if (t >= 1100)       { grid.elements[i] = E_LAVA;  grid.temps[i] = 700; }
-        break;
-
-      case E_SAND:
-        if (t >= 700)        { grid.elements[i] = E_GLASS; grid.temps[i] = 500; }
-        break;
-      case E_GLASS:
-        if (t >= 1000)       { grid.elements[i] = E_LAVA;  grid.temps[i] = 800; }
-        break;
-
-      case E_FIRE:
-        // fire dies down naturally
-        if (--grid.lifetimes[i] <= 0) {
-          if (randChance(0.4)) { grid.elements[i] = E_SMOKE; grid.lifetimes[i] = 120 + randInt(80); grid.temps[i] = 80; }
-          else clearCell(i);
-        } else {
-          grid.temps[i] = 500 + randInt(120);
-          igniteNeighbours(cellX(i), cellY(i));
-          // smoke above
-          if (randChance(0.04) && y_above_empty(i)) {
-            const j = i - COLS;
-            grid.elements[j] = E_SMOKE; grid.lifetimes[j] = 80 + randInt(60); grid.temps[j] = 90;
+      // Quenching on water contact, self-heating, and cooling down enough to harden to STONE
+      case E_LAVA: {
+        // Quench: if any cardinal neighbour is water, react on contact — lava becomes STONE,
+        // the water becomes STEAM, and nearby lava crusts (see lavaWaterReaction).
+        // This is an ADJACENCY reaction (fires whenever lava touches water), relocated here from
+        // the old collision-triggered COLLISION_REACTIONS table — lava+water should react on
+        // contact, not only when one physically moves into the other.
+        const cx = cellX(i), cy = cellY(i);
+        const dirs = [[0, -1], [0, 1], [-1, 0], [1, 0]];   // up, down, left, right
+        for (const [dx, dy] of dirs) {
+          const nx = cx + dx, ny = cy + dy;
+          if (!cellInBounds(nx, ny)) continue;
+          const k = cellIndex(nx, ny);
+          if (grid.elements[k] === E_WATER) {
+            lavaWaterReaction(i, k);
+            break;   // breaks the neighbor scan; cell i is STONE now
           }
-          // embers above — pretty rising flecks
-          if (randChance(0.06) && y_above_empty(i)) {
-            const j = i - COLS;
-            grid.elements[j] = E_EMBER; grid.lifetimes[j] = 14 + randInt(14); grid.temps[j] = 380;
+        }
+        // If the quench above turned us to stone, we're done this tick.
+        if (grid.elements[i] !== E_LAVA) {
+          break;
+        }
+
+        // Otherwise, normal lava behavior:
+        // Lava self-heats slightly
+        if (temp < 600) {
+          grid.temps[i] = 600;
+        }
+        // Harden back to STONE
+        if (temp < 480) {
+          grid.elements[i] = E_STONE;
+          grid.temps[i] = 460;
+        }
+        break;
+      }
+      // Melting to LAVA
+      case E_STONE:
+        if (temp >= 1100) {
+          grid.elements[i] = E_LAVA;
+          grid.temps[i] = 700;
+        }
+        break;
+
+      // Blasting to GLASS
+      case E_SAND:
+        if (temp >= 700) {
+          grid.elements[i] = E_GLASS;
+          grid.temps[i] = 500;
+        }
+        break;
+      // Melting to LAVA
+      case E_GLASS:
+        if (temp >= 1000) {
+          grid.elements[i] = E_LAVA;
+          grid.temps[i] = 800;
+        }
+        break;
+
+      // Fire dies down naturally pretty quick
+      case E_FIRE:
+        // Handle the fire dying down naturally
+        if (--grid.lifetimes[i] <= 0) {
+          // 40% chance to create smoke on dying down
+          if (randChance(0.4)) {
+            grid.elements[i] = E_SMOKE;
+            grid.lifetimes[i] = 120 + randInt(80);
+            grid.temps[i] = 80;
+          }
+          else {
+            clearCell(i);
+          }
+        }
+        else {
+          // Reassert temp to keep flame alive TODO maybe cooler physics here?
+          grid.temps[i] = 500 + randInt(120);
+
+          // Handle igniting neighbors
+          igniteNeighbours(cellX(i), cellY(i));
+
+          // Test whats above the fire cell
+          if (i >= COLS) {
+            const j = i - COLS
+            // If its empty, potentially spawn smoke or embers
+            if (grid.elements[j] === E_EMPTY) {
+              if (randChance(0.04)) {
+                grid.elements[j] = E_SMOKE;
+                grid.lifetimes[j] = 80 + randInt(60);
+                grid.temps[j] = 90;
+              }
+              else if (randChance(0.06)) {
+                grid.elements[j] = E_EMBER;
+                grid.lifetimes[j] = 14 + randInt(14);
+                grid.temps[j] = 380;
+              }
+            }
           }
         }
         break;
+      // Smoke dissipates
       case E_SMOKE:
-        if (--grid.lifetimes[i] <= 0) clearCell(i);
+        if (--grid.lifetimes[i] <= 0) {
+          clearCell(i);
+        }
         break;
+      // Embers dissipate, or hold their temp
+      case E_EMBER: {
+        if (--grid.lifetimes[i] <= 0) {
+          clearCell(i);
+        }
+        else {
+          grid.temps[i] = 380;
+        }
+        break;
+      }
 
+      // TODO Gonna fully rewrite Spark, its just a weird fire that travels through water as is. COME BACK HERE
       case E_SPARK: {
         if (grid.movedThisFrame[i]) break;  // freshly spawned this frame — let it decay/spread next frame
         if (--grid.lifetimes[i] <= 0) { clearCell(i); break; }
@@ -773,63 +879,85 @@ function reactions() {
         break;
       }
 
+      // Handle detonation
       case E_GUNPOWDER:
-        if (t >= DETONATE_AT_TEMP[E_GUNPOWDER]) {
-          // BOOM: convert to fire + spark, push neighbours
-          grid.elements[i] = E_FIRE; grid.lifetimes[i] = 25 + randInt(25); grid.temps[i] = 700;
+        if (temp >= DETONATE_AT_TEMP[E_GUNPOWDER]) {
+          // BOOM: convert to fire + spark, push neighbors
+          grid.elements[i] = E_FIRE;
+          grid.lifetimes[i] = 25 + randInt(25);
+          grid.temps[i] = 700;
+
+          // Look at all 8 neighbors and either ignite or potentially spawn fire.
+          const cx = cellX(i), cy = cellY(i);
           for (let dy = -1; dy <= 1; dy++) {
-            const xs = cellX(i), ys = cellY(i);
             for (let dx = -1; dx <= 1; dx++) {
-              const xx = xs + dx, yy = ys + dy;
-              if (!cellInBounds(xx, yy)) continue;
+              const xx = cx + dx, yy = cy + dy;
+              if (!cellInBounds(xx, yy)) {
+                continue;
+              }
               const j = cellIndex(xx,yy);
+              // Skip this cell, obviously already been processed
+              if (j === i) {
+                continue
+              }
               if (grid.elements[j] === E_EMPTY) {
-                if (randChance(0.5)) { grid.elements[j] = E_FIRE; grid.lifetimes[j] = 20 + randInt(20); grid.temps[j] = 600; }
-              } else if (grid.elements[j] === E_GUNPOWDER) {
+                if (randChance(0.5)) {
+                  grid.elements[j] = E_FIRE;
+                  grid.lifetimes[j] = 20 + randInt(20);
+                  grid.temps[j] = 600;
+                }
+              } else {
                 grid.temps[j] += 200;
-              } else if (grid.elements[j] !== E_WALL) {
-                grid.temps[j] += 120;
               }
             }
           }
         }
         break;
 
-      case E_WOOD:
-      case E_PLANT:
-      case E_OIL: {
-        // Per-element ignition: each flammable element has its own burnTemp + ignitionChance
-        // in the registry. WOOD = 220°/1.2%, PLANT = 180°/2%, OIL = 130°/5%.
-        if (t >= BURN_TEMP[eid] && randChance(IGNITION_CHANCE[eid])) {
-          grid.elements[i] = E_FIRE; grid.lifetimes[i] = 60 + randInt(60); grid.temps[i] = 500;
-        }
-        // plant growth
-        if (eid === E_PLANT) plantGrow(i);
+      // Growing when near water
+      case E_PLANT: {
+        plantGrow(i);
         break;
       }
 
+      // Fuse gets lit when either hot enough OR adjacent to fire/spark/lit fuse, and handle burning out
       case E_FUSE: {
-        // fuse lights when hot OR adjacent to fire/spark/lit fuse
+        // Fuse lights when hot OR adjacent to fire/spark/lit fuse
         const lit = grid.flags[i] === 1;
+        // Handle unlit fuse
         if (!lit) {
-          let ignite = t >= 150;
+          let ignite = temp >= 150;
+          // If not already ignited, check for cardinal/diagonal adjacency that could possibly ignite.
           if (!ignite) {
-            const xs = cellX(i), ys = cellY(i);
+            const cx = cellX(i), cy = cellY(i);
             for (let dy = -1; dy <= 1 && !ignite; dy++) {
               for (let dx = -1; dx <= 1 && !ignite; dx++) {
                 if (!dx && !dy) continue;
-                const nx = xs + dx, ny = ys + dy;
-                if (!cellInBounds(nx, ny)) continue;
-                const k = cellIndex(nx,ny);
-                const ne = grid.elements[k];
-                if (ne === E_FIRE || ne === E_SPARK || ne === E_LAVA) ignite = true;
-                if (ne === E_FUSE && grid.flags[k] === 1 && grid.lifetimes[k] < 18) ignite = true;
+                const xx = cx + dx, yy = cy + dy;
+                if (!cellInBounds(xx, yy)) continue;
+
+                const j = cellIndex(xx,yy);
+                const j_el = grid.elements[j];
+                if (j_el === E_FIRE || j_el === E_SPARK || j_el === E_LAVA) {
+                  ignite = true;
+                }
+                if (j_el === E_FUSE && grid.flags[j] === 1 && grid.lifetimes[j] < 18) {
+                  ignite = true;
+                }
               }
             }
           }
-          if (ignite) { grid.flags[i] = 1; grid.lifetimes[i] = 28 + randInt(8); grid.temps[i] = 250; }
-        } else {
-          // burning — fuse cell counts down, then puff into ember + ignite gunpowder if touching
+
+          // If fuse is now ignited, set it to its ignited state and give it a lifetime.
+          if (ignite) {
+            grid.flags[i] = 1;
+            grid.lifetimes[i] = 28 + randInt(8);
+            grid.temps[i] = 250;
+          }
+        }
+        // Handle already lit fuse.
+        else {
+          // While burning, fuse cell counts down, then puff into ember + ignite detonatables if touching
           grid.temps[i] = 320;
           if (--grid.lifetimes[i] <= 0) {
             // emit a small ember above if room, then become empty (or smoke briefly)
@@ -838,14 +966,16 @@ function reactions() {
               const j = i - COLS;
               grid.elements[j] = E_EMBER; grid.lifetimes[j] = 20 + randInt(20); grid.temps[j] = 380;
             }
-            // ignite touching gunpowder directly
+            // Ignite touching detonatable elements directly
             for (let dy = -1; dy <= 1; dy++) {
               for (let dx = -1; dx <= 1; dx++) {
                 if (!dx && !dy) continue;
                 const nx = xs + dx, ny = ys + dy;
                 if (!cellInBounds(nx, ny)) continue;
-                const k = cellIndex(nx,ny);
-                if (grid.elements[k] === E_GUNPOWDER) grid.temps[k] += 250;
+                const j = cellIndex(nx,ny);
+                if (DETONATE_AT_TEMP[grid.elements[j]] > 0) {
+                  grid.temps[j] += 250;
+                }
               }
             }
             clearCell(i);
@@ -854,28 +984,45 @@ function reactions() {
         break;
       }
 
-      case E_EMBER: {
-        if (--grid.lifetimes[i] <= 0) clearCell(i);
-        else grid.temps[i] = 380;
+      // Acid EATS ALL (except glass etc)
+      case E_ACID: {
+        // Try to dissolve a random cardinal neighbor
+        const dirs = [[0, 1], [0, -1], [-1, 0], [1, 0]];
+        for (let k = 0; k < 6; k++) {
+          // Pick a random direction to potentially CONSUME
+          const d = dirs[randInt(4)];
+          const nx = cellX(i) + d[0], ny = cellY(i) + d[1];
+          if (!cellInBounds(nx, ny)) continue;
+
+          // Now CONSUME IT (if valid to be consumed)
+          const j = cellIndex(nx, ny);
+          const ne = grid.elements[j];
+          if (ne === E_EMPTY || ne === E_ACID || ne === E_WALL || ne === E_GLASS) continue;
+          if (randChance(0.06)) {
+            clearCell(j);
+            // chance acid is consumed
+            if (randChance(0.4)) {
+              clearCell(i);
+            }
+          }
+        }
         break;
       }
 
-      case E_ACID:
-        acidEat(cellX(i), cellY(i));
-        break;
-
+      // Melts ice on contact, slowly dissolves into water.
       case E_SALT: {
-        // melts ice on contact and slowly dissolves into water
-        const xs = cellX(i), ys = cellY(i);
+        // Scan 8 neighbors, then either melt nearby ice or dissolve into water.
+        const cx = cellX(i), cy = cellY(i);
         saltScan: for (let dy = -1; dy <= 1; dy++) {
           for (let dx = -1; dx <= 1; dx++) {
             if (!dx && !dy) continue;
-            const nx = xs + dx, ny = ys + dy;
+            const nx = cx + dx, ny = cy + dy;
             if (!cellInBounds(nx, ny)) continue;
             const k = cellIndex(nx,ny);
             if (grid.elements[k] === E_ICE && randChance(0.25)) {
               grid.elements[k] = E_WATER; grid.temps[k] = 5;
-            } else if (grid.elements[k] === E_WATER && randChance(0.04)) {
+            }
+            else if (grid.elements[k] === E_WATER && randChance(0.04)) {
               clearCell(i);
               break saltScan;
             }
@@ -884,113 +1031,42 @@ function reactions() {
         break;
       }
 
-      case E_STORMGLASS: {
-        // Stormglass: absorbs nearby fire/spark/lava as charge.
-        // When charge >= threshold, discharges as branching lightning through
-        // connected water (and any adjacent metal-like conductors), then turns to glass.
-        const xs = cellX(i), ys = cellY(i);
-        let gained = 0;
-        for (let dy = -1; dy <= 1; dy++) {
-          for (let dx = -1; dx <= 1; dx++) {
-            if (!dx && !dy) continue;
-            const nx = xs + dx, ny = ys + dy;
-            if (!cellInBounds(nx, ny)) continue;
-            const k = cellIndex(nx,ny);
-            const ne = grid.elements[k];
-            if (ne === E_SPARK) gained += 3;
-            else if (ne === E_FIRE) gained += 1;
-            else if (ne === E_LAVA) gained += 1;
-            else if (ne === E_EMBER) gained += 1;
-          }
-        }
-        if (gained > 0) grid.flags[i] = Math.min(255, (grid.flags[i] || 0) + gained);
-        // visual heat tint as it charges
-        grid.temps[i] = 20 + (grid.flags[i] || 0) * 4;
-
-        if ((grid.flags[i] || 0) >= 12) {
-          // BFS through water from this cell, with branching, planting sparks
-          const visited = new Uint8Array(GRID_SIZE);
-          visited[i] = 1;
-          const queue = [i];
-          let head = 0, count = 0;
-          // first hop: zap any directly adjacent cell
-          for (let dy = -1; dy <= 1; dy++) {
-            for (let dx = -1; dx <= 1; dx++) {
-              if (!dx && !dy) continue;
-              const nx = xs + dx, ny = ys + dy;
-              if (!cellInBounds(nx, ny)) continue;
-              const k = cellIndex(nx,ny);
-              if (visited[k]) continue;
-              const ne = grid.elements[k];
-              if (ne === E_WATER || ne === E_EMPTY || ne === E_SAND || ne === E_WALL) {
-                if (ne === E_WALL) continue;        // walls block the bolt
-                visited[k] = 1;
-                grid.elements[k] = E_SPARK; grid.lifetimes[k] = 14 + randInt(8); grid.temps[k] = 600;
-                if (ne === E_WATER) queue.push(k);
-                count++;
-              }
-            }
-          }
-          // propagate through water with branching
-          while (head < queue.length && count < 50) {
-            const cur = queue[head++];
-            const cx = cellX(cur), cy = cellY(cur);
-            for (let dy = -1; dy <= 1; dy++) {
-              for (let dx = -1; dx <= 1; dx++) {
-                if (!dx && !dy) continue;
-                const nx = cx + dx, ny = cy + dy;
-                if (!cellInBounds(nx, ny)) continue;
-                const k = cellIndex(nx,ny);
-                if (visited[k]) continue;
-                if (grid.elements[k] === E_WATER) {
-                  // branch: skip ~30% to make it look like lightning, not a flood
-                  if (Math.random() < 0.30) { visited[k] = 1; continue; }
-                  visited[k] = 1;
-                  grid.elements[k] = E_SPARK; grid.lifetimes[k] = 12 + randInt(8); grid.temps[k] = 600;
-                  queue.push(k);
-                  count++;
-                  if (count >= 50) break;
-                }
-              }
-            }
-          }
-          // spent: turn back into inert glass
-          grid.elements[i] = E_GLASS; grid.flags[i] = 0; grid.temps[i] = 80;
-        }
-        break;
-      }
-
+      // Spreads onto wet plants and oil; converts adjacent plants/oil to mold;
+      // dies into a puff of dust/smoke when touched by fire or lava.
       case E_MOLD: {
-        // Spreads onto wet plants and oil; converts adjacent plants/oil to mold;
-        // dies into a puff of dust/smoke when touched by fire or lava.
-        const xs = cellX(i), ys = cellY(i);
+        const cx = cellX(i), cy = cellY(i);
         let dies = false;
         let waterNear = false;
         for (let dy = -1; dy <= 1; dy++) {
           for (let dx = -1; dx <= 1; dx++) {
             if (!dx && !dy) continue;
-            const nx = xs + dx, ny = ys + dy;
+            const nx = cx + dx, ny = cy + dy;
             if (!cellInBounds(nx, ny)) continue;
             const k = cellIndex(nx,ny);
             const ne = grid.elements[k];
-            if (ne === E_FIRE || ne === E_LAVA || ne === E_EMBER) { dies = true; break; }
-            if (ne === E_WATER) waterNear = true;
+            if (ne === E_FIRE || ne === E_LAVA || ne === E_EMBER) {
+              dies = true;
+              break;
+            }
+            if (ne === E_WATER) {
+              waterNear = true;
+            }
           }
           if (dies) break;
         }
         if (dies) {
-          // become a puff of smoke (the "dust" cloud) — drifts away
+          // Become a puff of smoke which drifts away
           grid.elements[i] = E_SMOKE; grid.lifetimes[i] = 100 + randInt(60); grid.temps[i] = 90; grid.flags[i] = 0;
           break;
         }
-        // try to convert one adjacent plant/oil cell into mold (faster when wet)
+        // Try to convert one adjacent plant/oil cell into mold (faster when wet, still happens slowly when dry)
         if (randChance(waterNear ? 0.06 : 0.012)) {
           const dirs = [[-1,0],[1,0],[0,-1],[0,1],[-1,-1],[1,1],[-1,1],[1,-1]];
           for (let kk = dirs.length - 1; kk > 0; kk--) {
             const r = randInt(kk+1); const tmp = dirs[kk]; dirs[kk] = dirs[r]; dirs[r] = tmp;
           }
           for (const d of dirs) {
-            const nx = xs + d[0], ny = ys + d[1];
+            const nx = cx + d[0], ny = cy + d[1];
             if (!cellInBounds(nx, ny)) continue;
             const k = cellIndex(nx,ny);
             const ne = grid.elements[k];
@@ -1005,13 +1081,8 @@ function reactions() {
     }
   }
 }
-//#endregion
 
 //#region Reaction Helpers
-function y_above_empty(i) {
-  if (i < COLS) return false;
-  return grid.elements[i - COLS] === E_EMPTY;
-}
 
 function plantGrow(i) {
   // grow toward adjacent empty cells if water nearby; slow rate
@@ -1028,7 +1099,7 @@ function plantGrow(i) {
     }
   }
   if (!hasWater) return;
-  // sprout into a random empty neighbour, prefer up
+  // sprout into a random empty neighbor, prefer up
   const dirs = [[0,-1],[0,-1],[-1,-1],[1,-1],[-1,0],[1,0]];
   for (let k = 0; k < 4; k++) {
     const d = dirs[randInt(dirs.length)];
@@ -1064,28 +1135,7 @@ function igniteNeighbours(x, y) {
   }
 }
 
-function acidEat(x, y) {
-  const i = cellIndex(x, y);
-  // try to dissolve a random neighbour
-  const dirs = [[0,1],[0,-1],[-1,0],[1,0]];
-  for (let k = 0; k < 4; k++) {
-    const d = dirs[randInt(4)];
-    const nx = x + d[0], ny = y + d[1];
-    if (!cellInBounds(nx, ny)) continue;
-    const j = cellIndex(nx,ny);
-    const ne = grid.elements[j];
-    if (ne === E_EMPTY || ne === E_ACID || ne === E_WALL || ne === E_GLASS) continue;
-    if (randChance(0.06)) {
-      clearCell(j);
-      // chance acid is consumed
-      if (randChance(0.4)) clearCell(i);
-      return;
-    }
-  }
-}
-//#endregion
 
-//#region Contact Reactions
 // Reactions that fire when one moving cell tries to enter another non-empty cell.
 // Looked up by [movingElement][destinationElement] inside tryMoveOrSwap.
 //
@@ -1132,11 +1182,31 @@ function lavaWaterReaction(i, j) {
   }
   return true;
 }
-const CONTACT_REACTIONS = {
-  [E_LAVA]:  { [E_WATER]: lavaWaterReaction },
-  [E_WATER]: { [E_LAVA]:  lavaWaterReaction },
-};
+
 //#endregion
+
+
+//endregion === Engine ===
+
+
+
+
+//#region Simulation
+
+
+
+
+
+
+// Currently NO collision reactions exist, but the system is wired. These are very specific - ONLY when a cell of one
+// element tires to move into the cell contained by a specific other element. Most reactions should us tickCell, but
+// some make sense for movement, like possibly dynamite in the future. Presering the old lava/water reaction just
+// to show syntax.
+const COLLISION_REACTIONS = {
+  //[E_LAVA]:  { [E_WATER]: lavaWaterReaction },
+  //[E_WATER]: { [E_LAVA]:  lavaWaterReaction },
+};
+
 
 //#region Movement
 // ---- per-cell movement ----------------------------------------------
@@ -1146,9 +1216,9 @@ function updateCell(x, y) {
   const e = grid.elements[i];
   if (e === E_EMPTY || e === E_WALL || e === E_GLASS ||
       e === E_WOOD  || e === E_ICE  || e === E_PLANT || e === E_FUSE ||
-      e === E_STORMGLASS || e === E_MOLD) return;
+      e === E_MOLD) return;
 
-  // FIRE & SPARK rise + flicker (heat/ignition handled per-tick in reactions())
+  // FIRE & SPARK rise + flicker (heat/ignition handled per-tick in tickCells())
   if (e === E_FIRE || e === E_SPARK) {
     const dy = randChance(0.7) ? -1 : 0;
     const dx = randInt(3) - 1;
@@ -1246,8 +1316,8 @@ function tryMoveOrSwap(i, nx, ny) {
       swapCells(i, j); return true;
     }
   }
-  // contact reactions — see Contact Reactions region for the table
-  const rxn = CONTACT_REACTIONS[here]?.[there];
+  // see Collision Reactions region for the table
+  const rxn = COLLISION_REACTIONS[here]?.[there];
   if (rxn) {
     if (typeof rxn === "function") return rxn(i, j);
     const [resultHere, resultThere, prob] = rxn;
@@ -1342,13 +1412,6 @@ function render() {
       } else if (eid === E_EMBER) {
         const k = (Math.random() * 40) | 0;
         r = 255; g = 150 + k; b = 30 + (k >> 1);
-      } else if (eid === E_STORMGLASS) {
-        // pale crystal; pulses warmer as charge builds
-        const charge = Math.min(12, grid.flags[i] || 0);
-        const pulse = ((frame >> 1) + i) & 7;
-        r = 200 + charge * 4 + pulse;
-        g = 220 + (pulse >> 1);
-        b = 245 - charge * 8;
       } else if (eid === E_MOLD) {
         // fuzzy organic noise — varies per cell, slow pulse
         const n = ((i * 91 + (frame >> 3)) & 31);
@@ -1400,10 +1463,6 @@ function render() {
           ctx.fillRect(x - 1, y - 1, 3, 3);
         } else if (eid === E_FUSE && grid.flags[i] === 1) {
           ctx.fillStyle = `rgba(255,140,40,0.4)`;
-          ctx.fillRect(x - 1, y - 1, 3, 3);
-        } else if (eid === E_STORMGLASS && (grid.flags[i] || 0) > 0) {
-          const a = Math.min(0.55, (grid.flags[i] / 12) * 0.55);
-          ctx.fillStyle = `rgba(160,200,255,${a})`;
           ctx.fillRect(x - 1, y - 1, 3, 3);
         }
       }
@@ -1501,7 +1560,7 @@ const PALETTE_ORDER = [
   E_EMPTY, E_WALL, E_SAND, E_WATER, E_WOOD, E_FIRE,
   E_LAVA, E_STEAM, E_ICE, E_PLANT, E_ACID, E_GUNPOWDER,
   E_OIL, E_STONE, E_GLASS, E_SPARK, E_FUSE, E_SALT,
-  E_STORMGLASS, E_MOLD
+  E_MOLD
 ];
 PALETTE_ORDER.forEach((eid, idxOrder) => {
   const b = document.createElement("button");
@@ -1623,21 +1682,6 @@ const SCENES = {
     for (let rx = 166; rx < 180; rx++) S(rx, 109, E_FUSE);
     for (let ry = 100; ry < 109; ry++) S(35, ry, E_FUSE);
     R(60, 90, 130, 100, E_WOOD);
-  },
-  storm() {
-    clearAll();
-    R(0, 130, _RX, _RY, E_WALL);
-    R(30, 55, 35, 130, E_GLASS);
-    R(165, 55, 170, 130, E_GLASS);
-    R(30, 125, 170, 130, E_GLASS);
-    R(35, 65, 165, 125, E_WATER);
-    S(60, 80, E_STORMGLASS);
-    S(140, 90, E_STORMGLASS);
-    S(100, 110, E_STORMGLASS);
-    S(100, 64, E_STORMGLASS);
-    S(100, 63, E_SPARK);
-    S(101, 63, E_SPARK);
-    S(99, 63, E_SPARK);
   },
   winter() {
     clearAll();
