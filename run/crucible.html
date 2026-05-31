@@ -331,7 +331,8 @@ const DEFAULT_MOVEMENT_FOR_KIND = [
 ];
 //endregion === Movement archetypes ===
 
-//region === Element IDs ===
+//region === Element Definitions ===
+
 // Top-level `const` to try to bribe V8 and SpiderMonkey into folding them to
 // literal integers at JIT time. Position MUST match the entry index in ELEMENT_DEFS below (will crash loud if not)
 const E_EMPTY      = 0;
@@ -355,46 +356,6 @@ const E_FUSE       = 17;
 const E_EMBER      = 18;
 const E_SALT       = 19;
 const E_MOLD       = 20;
-// Always the next valid id
-const ELEMENT_COUNT = 21;
-//endregion === Element IDs ===
-
-//region === Metadata Keys/Parallel Arrays ===
-
-// Every valid parallel array for scoping into element metadata
-const NAME             = new Array(ELEMENT_COUNT);          // string
-const KIND             = new Uint8Array(ELEMENT_COUNT);     // KIND_* enum (matter-state: displacement + render hint)
-const MOVEMENT         = new Uint8Array(ELEMENT_COUNT);     // MOVE_* enum (locomotion archetype; defaults from KIND)
-const COLOR            = new Array(ELEMENT_COUNT);          // each entry is an [r, g, b] tuple
-const DEFAULT_TEMP     = new Int16Array(ELEMENT_COUNT);
-const DENSITY          = new Int8Array(ELEMENT_COUNT);
-const SPREAD           = new Int8Array(ELEMENT_COUNT);
-const LIFETIME         = new Int16Array(ELEMENT_COUNT);
-const IGNITION_CHANCE  = new Float32Array(ELEMENT_COUNT);
-const BURN_TEMP        = new Int16Array(ELEMENT_COUNT);
-const DETONATE_AT_TEMP = new Int16Array(ELEMENT_COUNT);
-const THERMAL_MASS     = new Uint8Array(ELEMENT_COUNT);
-
-// List both allowed AND required keys (required subset of allowed obviously)
-const ELEMENT_KEYS = new Map([
-  ['id', {required: true}],
-  ['name', {required: true, store: NAME }],
-  ['kind', {required: true, store: KIND }],
-  ['color', {required: true, store: COLOR, transform: parseColor }],
-  ['defaultTemp', {required: true, store: DEFAULT_TEMP}],
-  ['movement', {required: false, store: MOVEMENT, default: s => DEFAULT_MOVEMENT_FOR_KIND[s.kind] }],
-  ['density', {required: false, store: DENSITY, default: 0}],
-  ['spread', {required: false, store: SPREAD, default: 0}],
-  ['lifetime', {required: false, store: LIFETIME, default: 0}],
-  ['ignitionChance', {required: false, store: IGNITION_CHANCE, default: 0}],
-  ['burnTemp', {required: false, store: BURN_TEMP, default: 0}],
-  ['detonateAtTemp', {required: false, store: DETONATE_AT_TEMP, default: 0}],
-  ['thermalMass', {required: false, store: THERMAL_MASS, default: 4}],
-]);
-
-//endregion === Keys/Parallel Arrays ===
-
-//region === Element definitions ===
 
 // One row per element. Position MUST MATCH element ID. To add a new element:
 //   1. Add an `E_FLOUNDER` constant above (next sequential integer)
@@ -407,7 +368,7 @@ const ELEMENT_DEFS = [
   { id: E_SAND,       name: 'Sand',       kind: KIND_POWDER, color: '#E0C171', defaultTemp:  20, density: 4 },
   { id: E_WATER,      name: 'Water',      kind: KIND_LIQUID, color: '#447CDE', defaultTemp:  20, density: 2, spread: 6 },
   { id: E_WOOD,       name: 'Wood',       kind: KIND_STATIC, color: '#6E4628', defaultTemp:  20, ignitionChance: 0.012, burnTemp: 220 },
-  { id: E_FIRE,       name: 'Fire',       kind: KIND_GAS,    movement: MOVE_FLAME, color: '#FF8C28', defaultTemp: 540, lifetime: 60 },
+  { id: E_FIRE,       name: 'Fire',       kind: KIND_GAS,    color: '#FF8C28', defaultTemp: 540, movement: MOVE_FLAME, lifetime: 60 },
   { id: E_LAVA,       name: 'Lava',       kind: KIND_LIQUID, color: '#E6461E', defaultTemp: 700, density: 6, spread: 1 },
   { id: E_STEAM,      name: 'Steam',      kind: KIND_GAS,    color: '#B4C8DC', defaultTemp: 130, lifetime: 600 },
   { id: E_ICE,        name: 'Ice',        kind: KIND_STATIC, color: '#AAD2EB', defaultTemp: -10, thermalMass: 24 },
@@ -418,49 +379,97 @@ const ELEMENT_DEFS = [
   { id: E_GUNPOWDER,  name: 'Gunpowder',  kind: KIND_POWDER, color: '#3C3C3C', defaultTemp:  20, density: 4, detonateAtTemp: 200 },
   { id: E_SMOKE,      name: 'Smoke',      kind: KIND_GAS,    color: '#3C3C48', defaultTemp:  80, lifetime: 200 },
   { id: E_OIL,        name: 'Oil',        kind: KIND_LIQUID, color: '#502850', defaultTemp:  20, density: 1, spread: 4, ignitionChance: 0.05, burnTemp: 130 },
-  { id: E_SPARK,      name: 'Spark',      kind: KIND_GAS,    movement: MOVE_FLAME, color: '#FFFFA0', defaultTemp: 600, lifetime: 8 },
+  { id: E_SPARK,      name: 'Spark',      kind: KIND_GAS,    color: '#FFFFA0', defaultTemp: 600, movement: MOVE_FLAME, lifetime: 8 },
   { id: E_FUSE,       name: 'Fuse',       kind: KIND_STATIC, color: '#B48C50', defaultTemp:  20 },
   { id: E_EMBER,      name: 'Ember',      kind: KIND_GAS,    color: '#FFAA3C', defaultTemp: 400, lifetime: 24 },
   { id: E_SALT,       name: 'Salt',       kind: KIND_POWDER, color: '#E6E6EB', defaultTemp:  20, density: 4 },
   { id: E_MOLD,       name: 'Mold',       kind: KIND_STATIC, color: '#6E8C50', defaultTemp:  20 },
 ];
-// Sanity check to catch a missed ELEMENT_COUNT bump or a duplicate/missing row
-if (ELEMENT_DEFS.length !== ELEMENT_COUNT) {
-  throw new Error(`ELEMENT_DEFS has ${ELEMENT_DEFS.length} entries but ELEMENT_COUNT is ${ELEMENT_COUNT}`);
-}
-// Also check for misaligned ELEMENT_DEFS element
-for (let i = 0; i < ELEMENT_DEFS.length; i++) {
-  if (ELEMENT_DEFS[i].id !== i) {
-    throw new Error(`Element '${ELEMENT_DEFS[i].name}' has id ${ELEMENT_DEFS[i].id} but sits at position ${i}. The constant and its row position disagree!!`);
-  }
-}
+const ELEMENT_COUNT = ELEMENT_DEFS.length;
 
 //endregion === Element definitions ===
 
+//region === Metadata Keys/Parallel Arrays ===
+
+// Every valid parallel array for scoping into element metadata
+const M_NAME             = new Array(ELEMENT_COUNT);          // string
+const M_KIND             = new Uint8Array(ELEMENT_COUNT);     // KIND_* enum (matter-state: displacement + render hint)
+const M_MOVEMENT         = new Uint8Array(ELEMENT_COUNT);     // MOVE_* enum (locomotion archetype; defaults from KIND)
+const M_COLOR            = new Array(ELEMENT_COUNT);          // each entry is an [r, g, b] tuple
+const M_DEFAULT_TEMP     = new Int16Array(ELEMENT_COUNT);
+const M_DENSITY          = new Int8Array(ELEMENT_COUNT);
+const M_SPREAD           = new Int8Array(ELEMENT_COUNT);
+const M_LIFETIME         = new Int16Array(ELEMENT_COUNT);
+const M_IGNITION_CHANCE  = new Float32Array(ELEMENT_COUNT);
+const M_BURN_TEMP        = new Int16Array(ELEMENT_COUNT);
+const M_DETONATE_AT_TEMP = new Int16Array(ELEMENT_COUNT);
+const M_THERMAL_MASS     = new Uint8Array(ELEMENT_COUNT);
+
+// List both allowed AND required keys (required subset of allowed obviously)
+const META_KEYS = new Map([
+  ['id', {required: true}],
+  ['name', {required: true, store: M_NAME }],
+  ['kind', {required: true, store: M_KIND }],
+  ['color', {required: true, store: M_COLOR, transform: parseColor }],
+  ['defaultTemp', {required: true, store: M_DEFAULT_TEMP}],
+  ['movement', {required: false, store: M_MOVEMENT, default: s => DEFAULT_MOVEMENT_FOR_KIND[s.kind] }],
+  ['density', {required: false, store: M_DENSITY, default: 0}],
+  ['spread', {required: false, store: M_SPREAD, default: 0}],
+  ['lifetime', {required: false, store: M_LIFETIME, default: 0}],
+  ['ignitionChance', {required: false, store: M_IGNITION_CHANCE, default: 0}],
+  ['burnTemp', {required: false, store: M_BURN_TEMP, default: 0}],
+  ['detonateAtTemp', {required: false, store: M_DETONATE_AT_TEMP, default: 0}],
+  ['thermalMass', {required: false, store: M_THERMAL_MASS, default: 4}],
+]);
+
+//endregion === Keys/Parallel Arrays ===
+
 //region === Final element baker ===
 
-// Autoconstructed, indexed by element ID. Hot-path code reads directly: KIND[eid], DENSITY[eid], etc.
+// Quick sanity check to catch a missed ELEMENT_COUNT bump or a duplicate/missing row
+if (ELEMENT_DEFS.length !== ELEMENT_COUNT) {
+  throw new Error(`ELEMENT_DEFS has ${ELEMENT_DEFS.length} entries but ELEMENT_COUNT is ${ELEMENT_COUNT}`);
+}
+
+// Autoconstructed, indexed by element ID. Hot-path code reads directly: M_KIND[eid], M_DENSITY[eid], etc.
 // Using typed arrays where the value range permits, these get tighter machine code than generic JS arrays and
 // live in contiguous memory. Population loop walks ELEMENT_DEFS once at startup, validates each row, and explodes the
 // metadata into the parallel arrays above.
 for (let i = 0; i < ELEMENT_COUNT; i++) {
   const spec = ELEMENT_DEFS[i];
 
-  // unknown-key check (unchanged)
+  // Unknown-key check
   for (const key of Object.keys(spec)) {
-    if (!ELEMENT_KEYS.has(key)) {
+    if (!META_KEYS.has(key)) {
       throw new Error(`Element ${spec.name ?? `at index ${i}`}: unknown property "${key}"`);
     }
   }
 
-  // validate + populate, entirely driven by the schema
-  for (const [key, meta] of ELEMENT_KEYS) {
+  // Validate and populate, entirely driven by the schema
+  for (const [key, meta] of META_KEYS) {
+    // Check for optionals that didn't declare a default - NOT GOOD!
+    if (!meta.required && meta.default === undefined) {
+      throw new Error(`Meta key "${key}" is declared as optional, but is missing a default value!`)
+    }
+
     let v = spec[key];
     if (v === undefined) {
-      if (meta.required) throw new Error(`Element at index ${i}: missing required property "${key}"`);
+      // If property is required and missing, crash
+      if (meta.required) {
+        throw new Error(`Element at index ${i}: missing required property "${key}"`);
+      }
       v = typeof meta.default === 'function' ? meta.default(spec) : meta.default;
     }
-    if (meta.store) meta.store[i] = meta.transform ? meta.transform(v) : v;
+    if (meta.store) {
+      meta.store[i] = meta.transform ? meta.transform(v) : v;
+    }
+  }
+}
+
+// Final sanity check for misaligned ELEMENT_DEFS element
+for (let i = 0; i < ELEMENT_DEFS.length; i++) {
+  if (ELEMENT_DEFS[i].id !== i) {
+    throw new Error(`Element '${ELEMENT_DEFS[i].name}' has id ${ELEMENT_DEFS[i].id} but sits at position ${i}. The constant and its row position disagree!!`);
   }
 }
 
@@ -548,12 +557,12 @@ function setCell(x, y, element, temperature) {
     grid.temps[i] = temperature;
   }
   else {
-    grid.temps[i] = DEFAULT_TEMP[element];
+    grid.temps[i] = M_DEFAULT_TEMP[element];
   }
 
   // If this element has a lifetime, seed it with a small random offset for visual variety.
   // LIFETIME[eid] is 0 for elements that don't decay, which naturally falls through to 0 here.
-  const baseLifetime = LIFETIME[element];
+  const baseLifetime = M_LIFETIME[element];
   if (baseLifetime > 0) {
     grid.lifetimes[i] = baseLifetime + randInt(20);
   }
@@ -692,7 +701,7 @@ function diffuseHeat() {
       // Thermal mass — how strongly a cell resists temperature change. Higher means
       // the cell's own temperature dominates the neighbour-average. ICE=24 (very
       // resistant, persists in warm air), STONE=8, WALL/GLASS=10, default=4.
-      const selfW = THERMAL_MASS[thisElement];
+      const selfW = M_THERMAL_MASS[thisElement];
 
       let sum = grid.tempsBuffer[i] * selfW;
       let n = selfW;
@@ -757,9 +766,9 @@ function tickCells() {
     //=== Generic data-driven properties get handled first ===
 
     // Ignition/flammability
-    if (IGNITION_CHANCE[thisElement] > 0 && temp >= BURN_TEMP[thisElement] && randChance(IGNITION_CHANCE[thisElement])) {
+    if (M_IGNITION_CHANCE[thisElement] > 0 && temp >= M_BURN_TEMP[thisElement] && randChance(M_IGNITION_CHANCE[thisElement])) {
       grid.elements[i] = E_FIRE;
-      grid.lifetimes[i] = LIFETIME[E_FIRE] + randInt(60)
+      grid.lifetimes[i] = M_LIFETIME[E_FIRE] + randInt(60)
       grid.temps[i] = 500;
       continue;
     }
@@ -1010,7 +1019,7 @@ function tickSpark(i) {
 
 // Handle detonation.
 function tickGunpowder(i, temp) {
-  if (temp >= DETONATE_AT_TEMP[grid.elements[i]]) {
+  if (temp >= M_DETONATE_AT_TEMP[grid.elements[i]]) {
     // BOOM: convert to fire + spark, push neighbors
     grid.elements[i] = E_FIRE;
     grid.lifetimes[i] = 25 + randInt(25);
@@ -1129,7 +1138,7 @@ function tickFuse(i, temp) {
           const nx = xs + dx, ny = ys + dy;
           if (!cellInBounds(nx, ny)) continue;
           const j = cellIndex(nx,ny);
-          if (DETONATE_AT_TEMP[grid.elements[j]] > 0) {
+          if (M_DETONATE_AT_TEMP[grid.elements[j]] > 0) {
             grid.temps[j] += 250;
           }
         }
@@ -1250,8 +1259,8 @@ function igniteNeighbors(x, y) {
       // Heat them up
       grid.temps[j] += 8;
       // Direct ignition chance for flammable elements (IGNITION_CHANCE > 0 means flammable)
-      const ignitionChance = IGNITION_CHANCE[ne];
-      if (ignitionChance > 0 && randChance(ignitionChance * 1.2) && grid.temps[j] >= (BURN_TEMP[ne] - 50)) {
+      const ignitionChance = M_IGNITION_CHANCE[ne];
+      if (ignitionChance > 0 && randChance(ignitionChance * 1.2) && grid.temps[j] >= (M_BURN_TEMP[ne] - 50)) {
         grid.elements[j] = E_FIRE;
         grid.lifetimes[j] = 50 + randInt(50);
         grid.temps[j] = 500;
@@ -1302,7 +1311,7 @@ function updateCell(x, y) {
   // (i, x, y) thread the cell's flat index + coords into every handler so they don't recompute them.
   // `e` is threaded into moveLiquid so it doesn't redo grid.elements[i] for the SPREAD lookup —
   // direct analogue of the `temp` passthrough in tickCells.
-  switch (MOVEMENT[e]) {
+  switch (M_MOVEMENT[e]) {
     case MOVE_FLAME:  moveFlame(i, x, y);     break;
     case MOVE_GAS:    moveGas(i, x, y);       break;
     case MOVE_POWDER: movePowder(i, x, y);    break;
@@ -1362,7 +1371,7 @@ function probeSide(i, x, y, dir, spread) {
 // actually flows fast instead of crawling one cell per frame.
 function moveLiquid(i, x, y, e) {
   if (tryFall(i, x, y)) return;
-  const spread = SPREAD[e] ?? 3;
+  const spread = M_SPREAD[e] ?? 3;
   const dir = randChance(0.5) ? -1 : 1;
   if (probeSide(i, x, y,  dir, spread)) return;
   if (probeSide(i, x, y, -dir, spread)) return;
@@ -1437,14 +1446,14 @@ function tryMoveOrSwap(i, nx, ny) {
   //   - A gas is the LIGHT one rising UP into a heavier fluid: swap if DENSITY[there] > DENSITY[here].
   // The gas branch can't be folded into the first: gases move upward, so a gas must initiate its own rise.
   // Without it, gas-vs-gas density stratification silently breaks (a heavy gas would never sink below a light one).
-  const kindHere = KIND[here], kindThere = KIND[there];
+  const kindHere = M_KIND[here], kindThere = M_KIND[there];
   if (kindHere === KIND_POWDER || kindHere === KIND_LIQUID) {
-    if ((kindThere === KIND_LIQUID || kindThere === KIND_GAS) && DENSITY[here] > DENSITY[there]) {
+    if ((kindThere === KIND_LIQUID || kindThere === KIND_GAS) && M_DENSITY[here] > M_DENSITY[there]) {
       swapCells(i, j); return true;
     }
   }
   if (kindHere === KIND_GAS) {
-    if ((kindThere === KIND_LIQUID || kindThere === KIND_GAS) && DENSITY[there] > DENSITY[here]) {
+    if ((kindThere === KIND_LIQUID || kindThere === KIND_GAS) && M_DENSITY[there] > M_DENSITY[here]) {
       swapCells(i, j); return true;
     }
   }
@@ -1486,7 +1495,7 @@ function render() {
       b = 255 * Math.max(0, 0.6 - k);
       if (eid === E_EMPTY) { r *= 0.3; g *= 0.3; b *= 0.3; }
     } else {
-      const c = COLOR[eid];
+      const c = M_COLOR[eid];
       r = c[0]; g = c[1]; b = c[2];
 
       // per-element variations for visual life
@@ -1621,7 +1630,7 @@ let heatPen = 20;
  * @param {number} [t] - optional temperature override; defaults to DEFAULT_TEMP[eid] inside setCell
  */
 function paintAt(gx, gy, eid, t) {
-  const kind = KIND[eid];
+  const kind = M_KIND[eid];
   const sparser = (kind === KIND_GAS || kind === KIND_POWDER) && eid !== E_EMPTY;
   const r = brushSize;
   for (let dy = -r; dy <= r; dy++) {
@@ -1662,7 +1671,7 @@ function doPaint() {
   if (mouse.btn === 2) {
     paintAt(mouse.gx, mouse.gy, E_EMPTY);
   } else {
-    paintAt(mouse.gx, mouse.gy, currentEl, DEFAULT_TEMP[currentEl]);
+    paintAt(mouse.gx, mouse.gy, currentEl, M_DEFAULT_TEMP[currentEl]);
   }
   // apply heat pen for non-element heat injection if WALL is held with shift (skip)
 }
@@ -1687,9 +1696,9 @@ PALETTE_ORDER.forEach((eid, idxOrder) => {
   const b = document.createElement("button");
   b.className = "pBtn";
   b.dataset.eid = eid;
-  b.title = NAME[eid] + (idxOrder < 9 ? `  [${idxOrder+1}]` : "");
-  const c = COLOR[eid];
-  b.innerHTML = `<span class="swatch" style="background:rgb(${c[0]},${c[1]},${c[2]})"></span><span>${NAME[eid]}</span>`;
+  b.title = M_NAME[eid] + (idxOrder < 9 ? `  [${idxOrder+1}]` : "");
+  const c = M_COLOR[eid];
+  b.innerHTML = `<span class="swatch" style="background:rgb(${c[0]},${c[1]},${c[2]})"></span><span>${M_NAME[eid]}</span>`;
   b.addEventListener("click", () => selectElement(eid));
   paletteEl.appendChild(b);
   buttons[eid] = b;
