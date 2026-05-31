@@ -224,9 +224,9 @@
 /** @typedef {[number, number, number]} RGBTriplet */
 
 // Sizing and resolution setup
-const COLS = 400;
-const ROWS = 280;
-const PX_PER_CELL = 4;
+const COLS = 440;
+const ROWS = 300;
+const PX_PER_CELL = 3;
 const WIDTH = COLS * PX_PER_CELL;
 const HEIGHT = ROWS * PX_PER_CELL;
 
@@ -289,12 +289,16 @@ function parseColor(value) {
 
 // =====================================================================
 // MENTAL MODEL: an element is just an integer ID, nothing more. The constants E_X below ARE
-// the elements. There is no "instance" of an element, because the number 3 literally IS Water, full stop.
-// All metadata lives in parallel typed arrays indexed by that ID: to find water's density, you just do DENSITY[E_WATER].
+// the elements. There is no "instance" of an element, because the number 3 literally IS Water, water has no further
+// "rich object" representation. All metadata lives in parallel typed arrays indexed by that ID: to find water's
+// density, you just do DENSITY[E_WATER]
 // =====================================================================
 
 //region === Kinds ===
-// Small fixed taxonomy that the movement dispatcher branches on.
+// Small fixed taxonomy for an element's matter-state. Drives density-displacement in tryMoveOrSwap
+// (who sinks, who rises, who can be shoved aside) and a render hint. It is ALSO the source of each
+// element's DEFAULT movement archetype (see below), but movement itself dispatches off MOVEMENT, not KIND (ie,
+// it can be overridden)
 const KIND_EMPTY   = 0;
 const KIND_STATIC  = 1;
 const KIND_POWDER  = 2;
@@ -302,11 +306,34 @@ const KIND_LIQUID  = 3;
 const KIND_GAS     = 4;
 //endregion === Kinds ===
 
+//region === Movement archetypes ===
+// How an element locomotes on its OWN turn, which is a separate axis from KIND. For most elements movement is
+// implied by KIND (a powder falls, a liquid flows, a gas rises), so they declare nothing and MOVEMENT is
+// derived from KIND at load time. Only genuinely exotic movers override it with an explicit movement
+// field (fire, for example). updateCell dispatches on MOVEMENT[e] as a jump table, so a
+// new exotic mover costs one constant + one case and never taxes the common cells.
+// ** DEFAULTS **
+const MOVE_STATIC  = 0;   // no locomotion (walls, wood, ice, …); also the default for empty cells
+const MOVE_POWDER  = 1;   // fall down / down-diagonal, pile up
+const MOVE_LIQUID  = 2;   // fall, then flow sideways to the furthest reachable cell
+const MOVE_GAS     = 3;   // rise, occasionally stall or sink
+// ** SPECIAL MOVEMENT TYPES **
+const MOVE_FLAME   = 4;   // fire & spark: rise and flicker, never sink
+
+// Default movement for an element that doesn't declare `movement:`, indexed by its KIND value.
+// Order MUST match the KIND_* enum above (same position-equals-value discipline as the element registry).
+const DEFAULT_MOVEMENT_FOR_KIND = [
+  MOVE_STATIC,   // KIND_EMPTY
+  MOVE_STATIC,   // KIND_STATIC
+  MOVE_POWDER,   // KIND_POWDER
+  MOVE_LIQUID,   // KIND_LIQUID
+  MOVE_GAS,      // KIND_GAS
+];
+//endregion === Movement archetypes ===
+
 //region === Element IDs ===
-// Top-level `const` so V8 and SpiderMonkey are guaranteed to fold them to
-// literal integers at JIT time. This is what makes switch jump tables and
-// hot-loop comparisons land at maximum speed. Position MUST match the entry
-// index in ELEMENT_DEFS below.
+// Top-level `const` to try to bribe V8 and SpiderMonkey into folding them to
+// literal integers at JIT time. Position MUST match the entry index in ELEMENT_DEFS below (will crash loud if not)
 const E_EMPTY      = 0;
 const E_WALL       = 1;
 const E_SAND       = 2;
@@ -332,11 +359,42 @@ const E_MOLD       = 20;
 const N_ELEMENTS = 21;
 //endregion === Element IDs ===
 
-//region === Element definitions ===
+//region === Metadata Keys/Parallel Arrays ===
+
+// Every valid parallel array for scoping into element metadata
+const NAME             = new Array(N_ELEMENTS);          // string
+const KIND             = new Uint8Array(N_ELEMENTS);     // KIND_* enum (matter-state: displacement + render hint)
+const MOVEMENT         = new Uint8Array(N_ELEMENTS);     // MOVE_* enum (locomotion archetype; defaults from KIND)
+const COLOR            = new Array(N_ELEMENTS);          // each entry is an [r, g, b] tuple
+const DEFAULT_TEMP     = new Int16Array(N_ELEMENTS);
+const DENSITY          = new Int8Array(N_ELEMENTS);
+const SPREAD           = new Int8Array(N_ELEMENTS);
+const LIFETIME         = new Int16Array(N_ELEMENTS);
+const IGNITION_CHANCE  = new Float32Array(N_ELEMENTS);
+const BURN_TEMP        = new Int16Array(N_ELEMENTS);
+const DETONATE_AT_TEMP = new Int16Array(N_ELEMENTS);
+const THERMAL_MASS     = new Uint8Array(N_ELEMENTS);
 
 // List both allowed AND required keys (required subset of allowed obviously)
-const ALLOWED_KEYS  = new Set(['id','name','kind','color','defaultTemp','density','spread','lifetime','ignitionChance','burnTemp','detonateAtTemp','thermalMass']);
-const REQUIRED_KEYS = ['id','name', 'kind', 'color', 'defaultTemp'];
+const ELEMENT_KEYS = new Map([
+  ['id', {required: true}],
+  ['name', {required: true, store: NAME }],
+  ['kind', {required: true, store: KIND }],
+  ['color', {required: true, store: COLOR, transform: parseColor }],
+  ['defaultTemp', {required: true, store: DEFAULT_TEMP}],
+  ['movement', {required: false, store: MOVEMENT, default: s => DEFAULT_MOVEMENT_FOR_KIND[s.kind] }],
+  ['density', {required: false, store: DENSITY, default: 0}],
+  ['spread', {required: false, store: SPREAD, default: 0}],
+  ['lifetime', {required: false, store: LIFETIME, default: 0}],
+  ['ignitionChance', {required: false, store: IGNITION_CHANCE, default: 0}],
+  ['burnTemp', {required: false, store: BURN_TEMP, default: 0}],
+  ['detonateAtTemp', {required: false, store: DETONATE_AT_TEMP, default: 0}],
+  ['thermalMass', {required: false, store: THERMAL_MASS, default: 4}],
+]);
+
+//endregion === Keys/Parallel Arrays ===
+
+//region === Element definitions ===
 
 // One row per element. Position MUST MATCH element ID. To add a new element:
 //   1. Add an `E_FLOUNDER` constant above (next sequential integer)
@@ -349,7 +407,7 @@ const ELEMENT_DEFS = [
   { id: E_SAND,       name: 'Sand',       kind: KIND_POWDER, color: '#E0C171', defaultTemp:  20, density: 4 },
   { id: E_WATER,      name: 'Water',      kind: KIND_LIQUID, color: '#447CDE', defaultTemp:  20, density: 2, spread: 6 },
   { id: E_WOOD,       name: 'Wood',       kind: KIND_STATIC, color: '#6E4628', defaultTemp:  20, ignitionChance: 0.012, burnTemp: 220 },
-  { id: E_FIRE,       name: 'Fire',       kind: KIND_GAS,    color: '#FF8C28', defaultTemp: 540, lifetime: 60 },
+  { id: E_FIRE,       name: 'Fire',       kind: KIND_GAS,    movement: MOVE_FLAME, color: '#FF8C28', defaultTemp: 540, lifetime: 60 },
   { id: E_LAVA,       name: 'Lava',       kind: KIND_LIQUID, color: '#E6461E', defaultTemp: 700, density: 6, spread: 1 },
   { id: E_STEAM,      name: 'Steam',      kind: KIND_GAS,    color: '#B4C8DC', defaultTemp: 130, lifetime: 600 },
   { id: E_ICE,        name: 'Ice',        kind: KIND_STATIC, color: '#AAD2EB', defaultTemp: -10, thermalMass: 24 },
@@ -360,7 +418,7 @@ const ELEMENT_DEFS = [
   { id: E_GUNPOWDER,  name: 'Gunpowder',  kind: KIND_POWDER, color: '#3C3C3C', defaultTemp:  20, density: 4, detonateAtTemp: 200 },
   { id: E_SMOKE,      name: 'Smoke',      kind: KIND_GAS,    color: '#3C3C48', defaultTemp:  80, lifetime: 200 },
   { id: E_OIL,        name: 'Oil',        kind: KIND_LIQUID, color: '#502850', defaultTemp:  20, density: 1, spread: 4, ignitionChance: 0.05, burnTemp: 130 },
-  { id: E_SPARK,      name: 'Spark',      kind: KIND_GAS,    color: '#FFFFA0', defaultTemp: 600, lifetime: 8 },
+  { id: E_SPARK,      name: 'Spark',      kind: KIND_GAS,    movement: MOVE_FLAME, color: '#FFFFA0', defaultTemp: 600, lifetime: 8 },
   { id: E_FUSE,       name: 'Fuse',       kind: KIND_STATIC, color: '#B48C50', defaultTemp:  20 },
   { id: E_EMBER,      name: 'Ember',      kind: KIND_GAS,    color: '#FFAA3C', defaultTemp: 400, lifetime: 24 },
   { id: E_SALT,       name: 'Salt',       kind: KIND_POWDER, color: '#E6E6EB', defaultTemp:  20, density: 4 },
@@ -373,56 +431,40 @@ if (ELEMENT_DEFS.length !== N_ELEMENTS) {
 // Also check for misaligned ELEMENT_DEFS element
 for (let i = 0; i < ELEMENT_DEFS.length; i++) {
   if (ELEMENT_DEFS[i].id !== i) {
-    throw new Error(`Element '${name}' has id ${ELEMENT_DEFS[i].id} but sits at position ${i}. The constant and its row position disagree!!`);
+    throw new Error(`Element '${ELEMENT_DEFS[i].name}' has id ${ELEMENT_DEFS[i].id} but sits at position ${i}. The constant and its row position disagree!!`);
   }
 }
 
 //endregion === Element definitions ===
 
-//region === Parallel metadata arrays ===
+//region === Final element baker ===
+
 // Autoconstructed, indexed by element ID. Hot-path code reads directly: KIND[eid], DENSITY[eid], etc.
 // Using typed arrays where the value range permits, these get tighter machine code than generic JS arrays and
 // live in contiguous memory. Population loop walks ELEMENT_DEFS once at startup, validates each row, and explodes the
 // metadata into the parallel arrays above.
-const NAME             = new Array(N_ELEMENTS);          // string
-const KIND             = new Uint8Array(N_ELEMENTS);     // KIND_* enum
-const COLOR            = new Array(N_ELEMENTS);          // each entry is an [r, g, b] tuple
-const DEFAULT_TEMP     = new Int16Array(N_ELEMENTS);
-const DENSITY          = new Int8Array(N_ELEMENTS);
-const SPREAD           = new Int8Array(N_ELEMENTS);
-const LIFETIME         = new Int16Array(N_ELEMENTS);
-const IGNITION_CHANCE  = new Float32Array(N_ELEMENTS);
-const BURN_TEMP        = new Int16Array(N_ELEMENTS);
-const DETONATE_AT_TEMP = new Int16Array(N_ELEMENTS);
-const THERMAL_MASS     = new Uint8Array(N_ELEMENTS);
-
-// Population loop
 for (let i = 0; i < N_ELEMENTS; i++) {
   const spec = ELEMENT_DEFS[i];
 
-  // Any key we don't recognize is a definition bug
+  // unknown-key check (unchanged)
   for (const key of Object.keys(spec)) {
-    if (!ALLOWED_KEYS.has(key)) throw new Error(`Element ${spec.name ?? `at index ${i}`}: unknown property "${key}"`);
-  }
-  // Required field check
-  for (const req of REQUIRED_KEYS) {
-    if (spec[req] === undefined) throw new Error(`Element at index ${i}: missing required property "${req}"`);
+    if (!ELEMENT_KEYS.has(key)) {
+      throw new Error(`Element ${spec.name ?? `at index ${i}`}: unknown property "${key}"`);
+    }
   }
 
-  NAME[i]             = spec.name;
-  KIND[i]             = spec.kind;
-  COLOR[i]            = parseColor(spec.color);
-  DEFAULT_TEMP[i]     = spec.defaultTemp;
-  DENSITY[i]          = spec.density          ?? 0;
-  SPREAD[i]           = spec.spread           ?? 0;
-  LIFETIME[i]         = spec.lifetime         ?? 0;
-  IGNITION_CHANCE[i]  = spec.ignitionChance   ?? 0;
-  BURN_TEMP[i]        = spec.burnTemp         ?? 0;
-  DETONATE_AT_TEMP[i] = spec.detonateAtTemp   ?? 0;
-  THERMAL_MASS[i]     = spec.thermalMass      ?? 4;
+  // validate + populate, entirely driven by the schema
+  for (const [key, meta] of ELEMENT_KEYS) {
+    let v = spec[key];
+    if (v === undefined) {
+      if (meta.required) throw new Error(`Element at index ${i}: missing required property "${key}"`);
+      v = typeof meta.default === 'function' ? meta.default(spec) : meta.default;
+    }
+    if (meta.store) meta.store[i] = meta.transform ? meta.transform(v) : v;
+  }
 }
 
-//endregion === Parallel metadata arrays ===
+//endregion === Final element baker ===
 
 //endregion === Element Registry ===
 
@@ -583,6 +625,9 @@ function swapCells(i, j) {
 
 
 
+// =====================================================================
+//           Engine - Stepping, ticking cells, reactions, and subsystems
+// =====================================================================
 //region === Engine ===
 
 let frame = 0;
@@ -599,16 +644,24 @@ function step() {
   // 2) Tick cells: environment/state driven changes to individual cells before reactions
   tickCells();
 
-  // 3) Movement — bottom-up, with alternating L/R scan to avoid bias.
+  // 3) Movement: bottom-up, with alternating L/R scan to avoid bias.
   const leftFirst = (frame & 1) === 0;
   for (let y = ROWS - 1; y >= 0; y--) {
     if (leftFirst) {
       for (let x = 0; x < COLS; x++) updateCell(x, y);
-    } else {
+    }
+    else {
       for (let x = COLS - 1; x >= 0; x--) updateCell(x, y);
     }
   }
 }
+
+
+
+// =====================================================================
+//           Engine Subsystems - Heat diffusion
+// =====================================================================
+//region Subsystems
 
 /**
  * We sample each cell's neighbors and pull a fraction of their temp toward
@@ -676,12 +729,21 @@ function diffuseHeat() {
   }
 }
 
-//#region Reactions & Helpers
+//endregion Subsystems
+
+
+
+// =====================================================================
+//           Engine Ticking and Reactions - tickCells, Contact Reactions, Reaction Helpers
+// =====================================================================
+//region Ticking and Reactions
 
 /**
  * The major driver of element interactions. All state changes and contact reactions (NOT collision reactions)
- * happen in this hot loop. First, generic data driver reactions like ignition from flame happen, then element-specific
- * things happen.
+ * happen in this hot loop. First, generic data-driven reactions (like ignition from heat) fire for every cell;
+ * then we dispatch into the element-specific tickX handler defined below. The switch is a clean jump-table —
+ * every case is a one-line call to a named handler. Adding a new element behavior = one case + one tickFoo
+ * function, and nothing else.
  */
 function tickCells() {
   for (let i = 0; i < GRID_SIZE; i++) {
@@ -692,7 +754,7 @@ function tickCells() {
     // Get any needed attributes of this cell.
     const temp = grid.temps[i];
 
-    //region === Generic data-driven properties get handled first ===
+    //=== Generic data-driven properties get handled first ===
 
     // Ignition/flammability
     if (IGNITION_CHANCE[thisElement] > 0 && temp >= BURN_TEMP[thisElement] && randChance(IGNITION_CHANCE[thisElement])) {
@@ -701,474 +763,512 @@ function tickCells() {
       grid.temps[i] = 500;
       continue;
     }
-    //endregion
 
-    // === Now handle element-specific effects. ===
+    // === Element-specific dispatch. Each handler is defined below in the same order as the cases.
+    // `temp` is threaded into handlers that read it, so they don't redo grid.temps[i]. The typed-array
+    // read is cheap but happens per active cell per frame, and on a screen-of-water that adds up.
     switch (thisElement) {
+      case E_WATER:     tickWater(i, temp);     break;
+      case E_STEAM:     tickSteam(i, temp);     break;
+      case E_ICE:       tickIce(i, temp);       break;
+      case E_LAVA:      tickLava(i, temp);      break;
+      case E_STONE:     tickStone(i, temp);     break;
+      case E_SAND:      tickSand(i, temp);      break;
+      case E_GLASS:     tickGlass(i, temp);     break;
+      case E_FIRE:      tickFire(i);            break;
+      case E_SMOKE:     tickSmoke(i);           break;
+      case E_EMBER:     tickEmber(i);           break;
+      case E_SPARK:     tickSpark(i);           break;
+      case E_GUNPOWDER: tickGunpowder(i, temp); break;
+      case E_PLANT:     tickPlant(i);           break;
+      case E_FUSE:      tickFuse(i, temp);      break;
+      case E_ACID:      tickAcid(i);            break;
+      case E_SALT:      tickSalt(i);            break;
+      case E_MOLD:      tickMold(i);            break;
+    }
+  }
+}
 
-      // Evaporation to STEAM and freezing to ICE.
-      case E_WATER:
-        // Evaporation
-        if (temp >= 100) {
-          grid.elements[i] = E_STEAM;
-          grid.lifetimes[i] = 700 + randInt(300);
-          grid.temps[i] = 130;
-        }
-        // Freezing
-        else if (temp <= -2) {
-          grid.elements[i] = E_ICE;
-        }
-        break;
-      // Precipitation to WATER, and dissipates to nothing.
-      case E_STEAM:
-        // Precipitation
-        if (temp < 60) {
-          grid.elements[i] = E_WATER;
-          grid.lifetimes[i] = 0;
-          grid.temps[i] = 50;
-        }
-        // Dissipation
-        else if (--grid.lifetimes[i] <= 0) {
-          clearCell(i);
-        }
-        break;
-      // Melting to WATER.
-      case E_ICE:
-        if (temp >= 1) {
-          grid.elements[i] = E_WATER;
-        }
-        break;
 
-      // Quenching on water contact, self-heating, and cooling down enough to harden to STONE
-      case E_LAVA: {
-        const cx = cellX(i), cy = cellY(i);
+// === Per-element tick handlers ===
 
-        // Quench: find an adjacent (cardinal) water cell. Lava touching water reacts on contact —
-        // this lava cell becomes STONE, the water becomes STEAM, and nearby lava crusts over.
-        // ADJACENCY reaction (fires whenever lava touches water, settled or not); relocated from
-        // the old collision-triggered COLLISION_REACTIONS table.
-        const dirs = [[0, -1], [0, 1], [-1, 0], [1, 0]];   // up, down, left, right
-        let waterI = -1;
-        for (const [dx, dy] of dirs) {
-          const nx = cx + dx, ny = cy + dy;
-          if (!cellInBounds(nx, ny)) continue;
-          const k = cellIndex(nx, ny);
-          if (grid.elements[k] === E_WATER) { waterI = k; break; }
-        }
+// One named function per element with bespoke behavior. tickCells dispatches into the right handler via a
+// jump-table switch — each call site is monomorphic, so V8/SpiderMonkey either inline these back into the
+// hot loop (zero overhead) or emit a cheap call (~ns). Order below matches the dispatch order in tickCells.
 
-        if (waterI !== -1) {
-          // React: this lava → STONE, the contacted water → STEAM.
-          grid.elements[i] = E_STONE;      grid.temps[i] = 380;        grid.lifetimes[i] = 0;
-          grid.elements[waterI] = E_STEAM; grid.temps[waterI] = 150;   grid.lifetimes[waterI] = 800 + randInt(400);
-          grid.movedThisFrame[i] = 1;      grid.movedThisFrame[waterI] = 1;
+// Evaporation to STEAM and freezing to ICE.
+function tickWater(i, temp) {
+  // Evaporation
+  if (temp >= 100) {
+    grid.elements[i] = E_STEAM;
+    grid.lifetimes[i] = 700 + randInt(300);
+    grid.temps[i] = 130;
+  }
+  // Freezing
+  else if (temp <= -2) {
+    grid.elements[i] = E_ICE;
+  }
+}
 
-          // Crust nearby lava — quench radius 2 with falloff, so a sea pour makes a thick crust.
-          for (let dy = -2; dy <= 2; dy++) {
-            for (let dx = -2; dx <= 2; dx++) {
-              if (!dx && !dy) continue;
-              const nx = cx + dx, ny = cy + dy;
-              if (!cellInBounds(nx, ny)) continue;
-              const k = cellIndex(nx, ny);
-              if (grid.elements[k] === E_LAVA) {
-                const dist = Math.abs(dx) + Math.abs(dy);
-                const p = dist === 1 ? 0.55 : dist === 2 ? 0.22 : 0.08;
-                if (Math.random() < p) {
-                  grid.elements[k] = E_STONE; grid.temps[k] = 360; grid.lifetimes[k] = 0; grid.movedThisFrame[k] = 1;
-                } else {
-                  grid.temps[k] -= 30;   // cool the rest a bit
-                }
-              }
-            }
+// Precipitation to WATER, and dissipates to nothing.
+function tickSteam(i, temp) {
+  // Precipitation
+  if (temp < 60) {
+    grid.elements[i] = E_WATER;
+    grid.lifetimes[i] = 0;
+    grid.temps[i] = 50;
+  }
+  // Dissipation
+  else if (--grid.lifetimes[i] <= 0) {
+    clearCell(i);
+  }
+}
+
+// Melting to WATER.
+function tickIce(i, temp) {
+  if (temp >= 1) {
+    grid.elements[i] = E_WATER;
+  }
+}
+
+// Quenching on water contact, self-heating, and cooling down enough to harden to STONE.
+function tickLava(i, temp) {
+  const cx = cellX(i), cy = cellY(i);
+
+  // Quench: find an adjacent (cardinal) water cell. Lava touching water reacts on contact —
+  // this lava cell becomes STONE, the water becomes STEAM, and nearby lava crusts over.
+  // ADJACENCY reaction (fires whenever lava touches water, settled or not); relocated from
+  // the old collision-triggered COLLISION_REACTIONS table.
+  const dirs = [[0, -1], [0, 1], [-1, 0], [1, 0]];   // up, down, left, right
+  let waterI = -1;
+  for (const [dx, dy] of dirs) {
+    const nx = cx + dx, ny = cy + dy;
+    if (!cellInBounds(nx, ny)) continue;
+    const k = cellIndex(nx, ny);
+    if (grid.elements[k] === E_WATER) { waterI = k; break; }
+  }
+
+  if (waterI !== -1) {
+    // React: this lava → STONE, the contacted water → STEAM.
+    grid.elements[i] = E_STONE;      grid.temps[i] = 380;        grid.lifetimes[i] = 0;
+    grid.elements[waterI] = E_STEAM; grid.temps[waterI] = 150;   grid.lifetimes[waterI] = 800 + randInt(400);
+    grid.movedThisFrame[i] = 1;      grid.movedThisFrame[waterI] = 1;
+
+    // Crust nearby lava — quench radius 2 with falloff, so a sea pour makes a thick crust.
+    for (let dy = -2; dy <= 2; dy++) {
+      for (let dx = -2; dx <= 2; dx++) {
+        if (!dx && !dy) continue;
+        const nx = cx + dx, ny = cy + dy;
+        if (!cellInBounds(nx, ny)) continue;
+        const k = cellIndex(nx, ny);
+        if (grid.elements[k] === E_LAVA) {
+          const dist = Math.abs(dx) + Math.abs(dy);
+          const p = dist === 1 ? 0.55 : dist === 2 ? 0.22 : 0.08;
+          if (Math.random() < p) {
+            grid.elements[k] = E_STONE; grid.temps[k] = 360; grid.lifetimes[k] = 0; grid.movedThisFrame[k] = 1;
+          } else {
+            grid.temps[k] -= 30;   // cool the rest a bit
           }
-
-          // Burst extra steam above the water contact point if there's room.
-          const wx = cellX(waterI), wy = cellY(waterI);
-          for (let dy = -2; dy <= 0; dy++) {
-            for (let dx = -1; dx <= 1; dx++) {
-              if (dx === 0 && dy === 0) continue;
-              const nx = wx + dx, ny = wy + dy;
-              if (!cellInBounds(nx, ny)) continue;
-              const k = cellIndex(nx, ny);
-              if (grid.elements[k] === E_EMPTY && Math.random() < 0.45) {
-                grid.elements[k] = E_STEAM; grid.temps[k] = 140; grid.lifetimes[k] = 600 + randInt(400); grid.movedThisFrame[k] = 1;
-              }
-            }
-          }
-          break;   // quenched into stone — done this tick
         }
-
-        // No water contact — normal lava behavior:
-        // Lava self-heats slightly
-        if (temp < 600) {
-          grid.temps[i] = 600;
-        }
-        // Harden back to STONE
-        if (temp < 480) {
-          grid.elements[i] = E_STONE;
-          grid.temps[i] = 460;
-        }
-        break;
       }
-      // Melting to LAVA
-      case E_STONE:
-        if (temp >= 1100) {
-          grid.elements[i] = E_LAVA;
-          grid.temps[i] = 700;
-        }
-        break;
+    }
 
-      // Blasting to GLASS
-      case E_SAND:
-        if (temp >= 700) {
-          grid.elements[i] = E_GLASS;
-          grid.temps[i] = 500;
+    // Burst extra steam above the water contact point if there's room.
+    const wx = cellX(waterI), wy = cellY(waterI);
+    for (let dy = -2; dy <= 0; dy++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        if (dx === 0 && dy === 0) continue;
+        const nx = wx + dx, ny = wy + dy;
+        if (!cellInBounds(nx, ny)) continue;
+        const k = cellIndex(nx, ny);
+        if (grid.elements[k] === E_EMPTY && Math.random() < 0.45) {
+          grid.elements[k] = E_STEAM; grid.temps[k] = 140; grid.lifetimes[k] = 600 + randInt(400); grid.movedThisFrame[k] = 1;
         }
-        break;
-      // Melting to LAVA
-      case E_GLASS:
-        if (temp >= 1000) {
-          grid.elements[i] = E_LAVA;
-          grid.temps[i] = 800;
-        }
-        break;
-
-      // Fire dies down naturally pretty quick
-      case E_FIRE:
-        // Handle the fire dying down naturally
-        if (--grid.lifetimes[i] <= 0) {
-          // 40% chance to create smoke on dying down
-          if (randChance(0.4)) {
-            grid.elements[i] = E_SMOKE;
-            grid.lifetimes[i] = 120 + randInt(80);
-            grid.temps[i] = 80;
-          }
-          else {
-            clearCell(i);
-          }
-        }
-        else {
-          // Reassert temp to keep flame alive TODO maybe cooler physics here?
-          grid.temps[i] = 500 + randInt(120);
-
-          // Handle igniting neighbors
-          igniteNeighbours(cellX(i), cellY(i));
-
-          // Test whats above the fire cell
-          if (i >= COLS) {
-            const j = i - COLS
-            // If its empty, potentially spawn smoke or embers
-            if (grid.elements[j] === E_EMPTY) {
-              if (randChance(0.04)) {
-                grid.elements[j] = E_SMOKE;
-                grid.lifetimes[j] = 80 + randInt(60);
-                grid.temps[j] = 90;
-              }
-              else if (randChance(0.06)) {
-                grid.elements[j] = E_EMBER;
-                grid.lifetimes[j] = 14 + randInt(14);
-                grid.temps[j] = 380;
-              }
-            }
-          }
-        }
-        break;
-      // Smoke dissipates
-      case E_SMOKE:
-        if (--grid.lifetimes[i] <= 0) {
-          clearCell(i);
-        }
-        break;
-      // Embers dissipate, or hold their temp
-      case E_EMBER: {
-        if (--grid.lifetimes[i] <= 0) {
-          clearCell(i);
-        }
-        else {
-          grid.temps[i] = 380;
-        }
-        break;
       }
+    }
+    return;   // quenched into stone — done this tick
+  }
 
-      // TODO Gonna fully rewrite Spark, its just a weird fire that travels through water as is. COME BACK HERE
-      case E_SPARK: {
-        if (grid.movedThisFrame[i]) break;  // freshly spawned this frame — let it decay/spread next frame
-        if (--grid.lifetimes[i] <= 0) { clearCell(i); break; }
-        grid.temps[i] = 600;
-        const xs = cellX(i), ys = cellY(i);
-        igniteNeighbours(xs, ys);
-        // CONDUCT through water: jump into a random water neighbour, leaving water behind.
-        const dirs = [[-1,0],[1,0],[0,-1],[0,1]];
-        for (let k = dirs.length - 1; k > 0; k--) {
-          const r = randInt(k+1); const tmp = dirs[k]; dirs[k] = dirs[r]; dirs[r] = tmp;
+  // No water contact — normal lava behavior:
+  // Lava self-heats slightly
+  if (temp < 600) {
+    grid.temps[i] = 600;
+  }
+  // Harden back to STONE
+  if (temp < 480) {
+    grid.elements[i] = E_STONE;
+    grid.temps[i] = 460;
+  }
+}
+
+// Melting to LAVA.
+function tickStone(i, temp) {
+  if (temp >= 1100) {
+    grid.elements[i] = E_LAVA;
+    grid.temps[i] = 700;
+  }
+}
+
+// Blasting to GLASS.
+function tickSand(i, temp) {
+  if (temp >= 700) {
+    grid.elements[i] = E_GLASS;
+    grid.temps[i] = 500;
+  }
+}
+
+// Melting to LAVA.
+function tickGlass(i, temp) {
+  if (temp >= 1000) {
+    grid.elements[i] = E_LAVA;
+    grid.temps[i] = 800;
+  }
+}
+
+// Fire dies down naturally pretty quick.
+function tickFire(i) {
+  // Handle the fire dying down naturally
+  if (--grid.lifetimes[i] <= 0) {
+    // 40% chance to create smoke on dying down
+    if (randChance(0.4)) {
+      grid.elements[i] = E_SMOKE;
+      grid.lifetimes[i] = 120 + randInt(80);
+      grid.temps[i] = 80;
+    }
+    else {
+      clearCell(i);
+    }
+  }
+  else {
+    // Reassert temp to keep flame alive TODO maybe cooler physics here?
+    grid.temps[i] = 500 + randInt(120);
+
+    // Handle igniting neighbors
+    igniteNeighbors(cellX(i), cellY(i));
+
+    // Test whats above the fire cell
+    if (i >= COLS) {
+      const j = i - COLS
+      // If its empty, potentially spawn smoke or embers
+      if (grid.elements[j] === E_EMPTY) {
+        if (randChance(0.04)) {
+          grid.elements[j] = E_SMOKE;
+          grid.lifetimes[j] = 80 + randInt(60);
+          grid.temps[j] = 90;
         }
-        for (let k = 0; k < dirs.length; k++) {
-          const nx = xs + dirs[k][0], ny = ys + dirs[k][1];
+        else if (randChance(0.06)) {
+          grid.elements[j] = E_EMBER;
+          grid.lifetimes[j] = 14 + randInt(14);
+          grid.temps[j] = 380;
+        }
+      }
+    }
+  }
+}
+
+// Smoke dissipates.
+function tickSmoke(i) {
+  if (--grid.lifetimes[i] <= 0) {
+    clearCell(i);
+  }
+}
+
+// Embers dissipate, or hold their temp.
+function tickEmber(i) {
+  if (--grid.lifetimes[i] <= 0) {
+    clearCell(i);
+  }
+  else {
+    grid.temps[i] = 380;
+  }
+}
+
+// TODO Gonna fully rewrite Spark, its just a weird fire that travels through water as is. COME BACK HERE
+function tickSpark(i) {
+  if (grid.movedThisFrame[i]) return;  // freshly spawned this frame — let it decay/spread next frame
+  if (--grid.lifetimes[i] <= 0) { clearCell(i); return; }
+  grid.temps[i] = 600;
+  const xs = cellX(i), ys = cellY(i);
+  igniteNeighbors(xs, ys);
+  // CONDUCT through water: jump into a random water neighbour, leaving water behind.
+  const dirs = [[-1,0],[1,0],[0,-1],[0,1]];
+  for (let k = dirs.length - 1; k > 0; k--) {
+    const r = randInt(k+1); const tmp = dirs[k]; dirs[k] = dirs[r]; dirs[r] = tmp;
+  }
+  for (let k = 0; k < dirs.length; k++) {
+    const nx = xs + dirs[k][0], ny = ys + dirs[k][1];
+    if (!cellInBounds(nx, ny)) continue;
+    const j = cellIndex(nx,ny);
+    if (grid.elements[j] === E_WATER) {
+      grid.elements[j] = E_SPARK; grid.lifetimes[j] = 6 + randInt(4); grid.temps[j] = 600; grid.movedThisFrame[j] = 1;
+      grid.elements[i] = E_WATER; grid.lifetimes[i] = 0; grid.temps[i] = 30;
+      break;
+    }
+    if (grid.elements[j] === E_GUNPOWDER) { grid.temps[j] += 220; }
+  }
+}
+
+// Handle detonation.
+function tickGunpowder(i, temp) {
+  if (temp >= DETONATE_AT_TEMP[grid.elements[i]]) {
+    // BOOM: convert to fire + spark, push neighbors
+    grid.elements[i] = E_FIRE;
+    grid.lifetimes[i] = 25 + randInt(25);
+    grid.temps[i] = 700;
+
+    // Look at all 8 neighbors and either ignite or potentially spawn fire.
+    const cx = cellX(i), cy = cellY(i);
+    for (let dy = -1; dy <= 1; dy++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        const xx = cx + dx, yy = cy + dy;
+        if (!cellInBounds(xx, yy)) {
+          continue;
+        }
+        const j = cellIndex(xx,yy);
+        // Skip this cell, obviously already been processed
+        if (j === i) {
+          continue
+        }
+        if (grid.elements[j] === E_EMPTY) {
+          if (randChance(0.5)) {
+            grid.elements[j] = E_FIRE;
+            grid.lifetimes[j] = 20 + randInt(20);
+            grid.temps[j] = 600;
+          }
+        } else {
+          grid.temps[j] += 200;
+        }
+      }
+    }
+  }
+}
+
+// Growing when near water.
+function tickPlant(i) {
+  // Grow toward adjacent empty cells if water nearby; slow rate
+  if (!randChance(0.02)) return;
+  if ((grid.flags[i] || 0) > 14) return;  // age cap so plants don't fill the world
+  const x = cellX(i), y = cellY(i);
+  // Find water neighbor within radius 2
+  let hasWater = false;
+  for (let dy = -2; dy <= 2 && !hasWater; dy++) {
+    for (let dx = -2; dx <= 2 && !hasWater; dx++) {
+      const xx = x + dx, yy = y + dy;
+      if (!cellInBounds(xx, yy)) continue;
+      if (grid.elements[cellIndex(xx,yy)] === E_WATER) hasWater = true;
+    }
+  }
+  if (!hasWater) return;
+  // Sprout into a random empty neighbor, prefer up
+  const dirs = [[0,-1],[0,-1],[-1,-1],[1,-1],[-1,0],[1,0]];
+  for (let k = 0; k < 4; k++) {
+    const d = dirs[randInt(dirs.length)];
+    const xx = x + d[0], yy = y + d[1];
+    if (!cellInBounds(xx, yy)) continue;
+    const j = cellIndex(xx,yy);
+    if (grid.elements[j] === E_EMPTY || grid.elements[j] === E_WATER) {
+      grid.elements[j] = E_PLANT; grid.temps[j] = 20; grid.flags[j] = (grid.flags[i] || 0) + 1;
+      if ((grid.flags[j] || 0) > 18) {
+        grid.flags[j] = 18;   // age cap
+      }
+      break;
+    }
+  }
+}
+
+// Fuse gets lit when either hot enough OR adjacent to fire/spark/lit fuse, and handles burning out.
+function tickFuse(i, temp) {
+  // Fuse lights when hot OR adjacent to fire/spark/lit fuse
+  const lit = grid.flags[i] === 1;
+  // Handle unlit fuse
+  if (!lit) {
+    let ignite = temp >= 150;
+    // If not already ignited, check for cardinal/diagonal adjacency that could possibly ignite.
+    if (!ignite) {
+      const cx = cellX(i), cy = cellY(i);
+      for (let dy = -1; dy <= 1 && !ignite; dy++) {
+        for (let dx = -1; dx <= 1 && !ignite; dx++) {
+          if (!dx && !dy) continue;
+          const xx = cx + dx, yy = cy + dy;
+          if (!cellInBounds(xx, yy)) continue;
+
+          const j = cellIndex(xx,yy);
+          const j_el = grid.elements[j];
+          if (j_el === E_FIRE || j_el === E_SPARK || j_el === E_LAVA) {
+            ignite = true;
+          }
+          if (j_el === E_FUSE && grid.flags[j] === 1 && grid.lifetimes[j] < 18) {
+            ignite = true;
+          }
+        }
+      }
+    }
+
+    // If fuse is now ignited, set it to its ignited state and give it a lifetime.
+    if (ignite) {
+      grid.flags[i] = 1;
+      grid.lifetimes[i] = 28 + randInt(8);
+      grid.temps[i] = 250;
+    }
+  }
+  // Handle already lit fuse.
+  else {
+    // While burning, fuse cell counts down, then puff into ember + ignite detonatables if touching
+    grid.temps[i] = 320;
+    if (--grid.lifetimes[i] <= 0) {
+      // emit a small ember above if room, then become empty (or smoke briefly)
+      const xs = cellX(i), ys = cellY(i);
+      if (ys > 0 && grid.elements[i - COLS] === E_EMPTY) {
+        const j = i - COLS;
+        grid.elements[j] = E_EMBER; grid.lifetimes[j] = 20 + randInt(20); grid.temps[j] = 380;
+      }
+      // Ignite touching detonatable elements directly
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          if (!dx && !dy) continue;
+          const nx = xs + dx, ny = ys + dy;
           if (!cellInBounds(nx, ny)) continue;
           const j = cellIndex(nx,ny);
-          if (grid.elements[j] === E_WATER) {
-            grid.elements[j] = E_SPARK; grid.lifetimes[j] = 6 + randInt(4); grid.temps[j] = 600; grid.movedThisFrame[j] = 1;
-            grid.elements[i] = E_WATER; grid.lifetimes[i] = 0; grid.temps[i] = 30;
-            break;
+          if (DETONATE_AT_TEMP[grid.elements[j]] > 0) {
+            grid.temps[j] += 250;
           }
-          if (grid.elements[j] === E_GUNPOWDER) { grid.temps[j] += 220; }
         }
+      }
+      clearCell(i);
+    }
+  }
+}
+
+// Acid EATS ALL (except glass etc).
+function tickAcid(i) {
+  // Try to dissolve a random cardinal neighbor
+  const dirs = [[0, 1], [0, -1], [-1, 0], [1, 0]];
+  for (let k = 0; k < 6; k++) {
+    // Pick a random direction to potentially CONSUME
+    const d = dirs[randInt(4)];
+    const nx = cellX(i) + d[0], ny = cellY(i) + d[1];
+    if (!cellInBounds(nx, ny)) continue;
+
+    // Now CONSUME IT (if valid to be consumed)
+    const j = cellIndex(nx, ny);
+    const ne = grid.elements[j];
+    if (ne === E_EMPTY || ne === E_ACID || ne === E_WALL || ne === E_GLASS) continue;
+    if (randChance(0.06)) {
+      clearCell(j);
+      // chance acid is consumed
+      if (randChance(0.4)) {
+        clearCell(i);
+      }
+    }
+  }
+}
+
+// Melts ice on contact, slowly dissolves into water.
+function tickSalt(i) {
+  // Scan 8 neighbors, then either melt nearby ice or dissolve into water.
+  const cx = cellX(i), cy = cellY(i);
+  for (let dy = -1; dy <= 1; dy++) {
+    for (let dx = -1; dx <= 1; dx++) {
+      if (!dx && !dy) continue;
+      const nx = cx + dx, ny = cy + dy;
+      if (!cellInBounds(nx, ny)) continue;
+      const k = cellIndex(nx,ny);
+      if (grid.elements[k] === E_ICE && randChance(0.25)) {
+        grid.elements[k] = E_WATER; grid.temps[k] = 5;
+      }
+      else if (grid.elements[k] === E_WATER && randChance(0.04)) {
+        clearCell(i);
+        return;
+      }
+    }
+  }
+}
+
+// Spreads onto wet plants and oil; converts adjacent plants/oil to mold;
+// dies into a puff of dust/smoke when touched by fire or lava.
+function tickMold(i) {
+  const cx = cellX(i), cy = cellY(i);
+  let dies = false;
+  let waterNear = false;
+  for (let dy = -1; dy <= 1; dy++) {
+    for (let dx = -1; dx <= 1; dx++) {
+      if (!dx && !dy) continue;
+      const nx = cx + dx, ny = cy + dy;
+      if (!cellInBounds(nx, ny)) continue;
+      const k = cellIndex(nx,ny);
+      const ne = grid.elements[k];
+      if (ne === E_FIRE || ne === E_LAVA || ne === E_EMBER) {
+        dies = true;
         break;
       }
-
-      // Handle detonation
-      case E_GUNPOWDER:
-        if (temp >= DETONATE_AT_TEMP[E_GUNPOWDER]) {
-          // BOOM: convert to fire + spark, push neighbors
-          grid.elements[i] = E_FIRE;
-          grid.lifetimes[i] = 25 + randInt(25);
-          grid.temps[i] = 700;
-
-          // Look at all 8 neighbors and either ignite or potentially spawn fire.
-          const cx = cellX(i), cy = cellY(i);
-          for (let dy = -1; dy <= 1; dy++) {
-            for (let dx = -1; dx <= 1; dx++) {
-              const xx = cx + dx, yy = cy + dy;
-              if (!cellInBounds(xx, yy)) {
-                continue;
-              }
-              const j = cellIndex(xx,yy);
-              // Skip this cell, obviously already been processed
-              if (j === i) {
-                continue
-              }
-              if (grid.elements[j] === E_EMPTY) {
-                if (randChance(0.5)) {
-                  grid.elements[j] = E_FIRE;
-                  grid.lifetimes[j] = 20 + randInt(20);
-                  grid.temps[j] = 600;
-                }
-              } else {
-                grid.temps[j] += 200;
-              }
-            }
-          }
-        }
-        break;
-
-      // Growing when near water
-      case E_PLANT: {
-        // Grow toward adjacent empty cells if water nearby; slow rate
-        if (!randChance(0.02)) continue;
-        if ((grid.flags[i] || 0) > 14) continue;  // age cap so plants don't fill the world
-        const x = cellX(i), y = cellY(i);
-        // Find water neighbor within radius 2
-        let hasWater = false;
-        for (let dy = -2; dy <= 2 && !hasWater; dy++) {
-          for (let dx = -2; dx <= 2 && !hasWater; dx++) {
-            const xx = x + dx, yy = y + dy;
-            if (!cellInBounds(xx, yy)) continue;
-            if (grid.elements[cellIndex(xx,yy)] === E_WATER) hasWater = true;
-          }
-        }
-        if (!hasWater) continue;
-        // Sprout into a random empty neighbor, prefer up
-        const dirs = [[0,-1],[0,-1],[-1,-1],[1,-1],[-1,0],[1,0]];
-        for (let k = 0; k < 4; k++) {
-          const d = dirs[randInt(dirs.length)];
-          const xx = x + d[0], yy = y + d[1];
-          if (!cellInBounds(xx, yy)) continue;
-          const j = cellIndex(xx,yy);
-          if (grid.elements[j] === E_EMPTY || grid.elements[j] === E_WATER) {
-            grid.elements[j] = E_PLANT; grid.temps[j] = 20; grid.flags[j] = (grid.flags[i] || 0) + 1;
-            if ((grid.flags[j] || 0) > 18) {
-              grid.flags[j] = 18;   // age cap
-            }
-            break;
-          }
-        }
-        break;
+      if (ne === E_WATER) {
+        waterNear = true;
       }
-
-      // Fuse gets lit when either hot enough OR adjacent to fire/spark/lit fuse, and handle burning out
-      case E_FUSE: {
-        // Fuse lights when hot OR adjacent to fire/spark/lit fuse
-        const lit = grid.flags[i] === 1;
-        // Handle unlit fuse
-        if (!lit) {
-          let ignite = temp >= 150;
-          // If not already ignited, check for cardinal/diagonal adjacency that could possibly ignite.
-          if (!ignite) {
-            const cx = cellX(i), cy = cellY(i);
-            for (let dy = -1; dy <= 1 && !ignite; dy++) {
-              for (let dx = -1; dx <= 1 && !ignite; dx++) {
-                if (!dx && !dy) continue;
-                const xx = cx + dx, yy = cy + dy;
-                if (!cellInBounds(xx, yy)) continue;
-
-                const j = cellIndex(xx,yy);
-                const j_el = grid.elements[j];
-                if (j_el === E_FIRE || j_el === E_SPARK || j_el === E_LAVA) {
-                  ignite = true;
-                }
-                if (j_el === E_FUSE && grid.flags[j] === 1 && grid.lifetimes[j] < 18) {
-                  ignite = true;
-                }
-              }
-            }
-          }
-
-          // If fuse is now ignited, set it to its ignited state and give it a lifetime.
-          if (ignite) {
-            grid.flags[i] = 1;
-            grid.lifetimes[i] = 28 + randInt(8);
-            grid.temps[i] = 250;
-          }
-        }
-        // Handle already lit fuse.
-        else {
-          // While burning, fuse cell counts down, then puff into ember + ignite detonatables if touching
-          grid.temps[i] = 320;
-          if (--grid.lifetimes[i] <= 0) {
-            // emit a small ember above if room, then become empty (or smoke briefly)
-            const xs = cellX(i), ys = cellY(i);
-            if (ys > 0 && grid.elements[i - COLS] === E_EMPTY) {
-              const j = i - COLS;
-              grid.elements[j] = E_EMBER; grid.lifetimes[j] = 20 + randInt(20); grid.temps[j] = 380;
-            }
-            // Ignite touching detonatable elements directly
-            for (let dy = -1; dy <= 1; dy++) {
-              for (let dx = -1; dx <= 1; dx++) {
-                if (!dx && !dy) continue;
-                const nx = xs + dx, ny = ys + dy;
-                if (!cellInBounds(nx, ny)) continue;
-                const j = cellIndex(nx,ny);
-                if (DETONATE_AT_TEMP[grid.elements[j]] > 0) {
-                  grid.temps[j] += 250;
-                }
-              }
-            }
-            clearCell(i);
-          }
-        }
-        break;
-      }
-
-      // Acid EATS ALL (except glass etc)
-      case E_ACID: {
-        // Try to dissolve a random cardinal neighbor
-        const dirs = [[0, 1], [0, -1], [-1, 0], [1, 0]];
-        for (let k = 0; k < 6; k++) {
-          // Pick a random direction to potentially CONSUME
-          const d = dirs[randInt(4)];
-          const nx = cellX(i) + d[0], ny = cellY(i) + d[1];
-          if (!cellInBounds(nx, ny)) continue;
-
-          // Now CONSUME IT (if valid to be consumed)
-          const j = cellIndex(nx, ny);
-          const ne = grid.elements[j];
-          if (ne === E_EMPTY || ne === E_ACID || ne === E_WALL || ne === E_GLASS) continue;
-          if (randChance(0.06)) {
-            clearCell(j);
-            // chance acid is consumed
-            if (randChance(0.4)) {
-              clearCell(i);
-            }
-          }
-        }
-        break;
-      }
-
-      // Melts ice on contact, slowly dissolves into water.
-      case E_SALT: {
-        // Scan 8 neighbors, then either melt nearby ice or dissolve into water.
-        const cx = cellX(i), cy = cellY(i);
-        saltScan: for (let dy = -1; dy <= 1; dy++) {
-          for (let dx = -1; dx <= 1; dx++) {
-            if (!dx && !dy) continue;
-            const nx = cx + dx, ny = cy + dy;
-            if (!cellInBounds(nx, ny)) continue;
-            const k = cellIndex(nx,ny);
-            if (grid.elements[k] === E_ICE && randChance(0.25)) {
-              grid.elements[k] = E_WATER; grid.temps[k] = 5;
-            }
-            else if (grid.elements[k] === E_WATER && randChance(0.04)) {
-              clearCell(i);
-              break saltScan;
-            }
-          }
-        }
-        break;
-      }
-
-      // Spreads onto wet plants and oil; converts adjacent plants/oil to mold;
-      // dies into a puff of dust/smoke when touched by fire or lava.
-      case E_MOLD: {
-        const cx = cellX(i), cy = cellY(i);
-        let dies = false;
-        let waterNear = false;
-        for (let dy = -1; dy <= 1; dy++) {
-          for (let dx = -1; dx <= 1; dx++) {
-            if (!dx && !dy) continue;
-            const nx = cx + dx, ny = cy + dy;
-            if (!cellInBounds(nx, ny)) continue;
-            const k = cellIndex(nx,ny);
-            const ne = grid.elements[k];
-            if (ne === E_FIRE || ne === E_LAVA || ne === E_EMBER) {
-              dies = true;
-              break;
-            }
-            if (ne === E_WATER) {
-              waterNear = true;
-            }
-          }
-          if (dies) break;
-        }
-        if (dies) {
-          // Become a puff of smoke which drifts away
-          grid.elements[i] = E_SMOKE; grid.lifetimes[i] = 100 + randInt(60); grid.temps[i] = 90; grid.flags[i] = 0;
-          break;
-        }
-        // Try to convert one adjacent plant/oil cell into mold (faster when wet, still happens slowly when dry)
-        if (randChance(waterNear ? 0.06 : 0.012)) {
-          const dirs = [[-1,0],[1,0],[0,-1],[0,1],[-1,-1],[1,1],[-1,1],[1,-1]];
-          for (let kk = dirs.length - 1; kk > 0; kk--) {
-            const r = randInt(kk+1); const tmp = dirs[kk]; dirs[kk] = dirs[r]; dirs[r] = tmp;
-          }
-          for (const d of dirs) {
-            const nx = cx + d[0], ny = cy + d[1];
-            if (!cellInBounds(nx, ny)) continue;
-            const k = cellIndex(nx,ny);
-            const ne = grid.elements[k];
-            if (ne === E_PLANT || ne === E_OIL) {
-              grid.elements[k] = E_MOLD; grid.flags[k] = 0; grid.temps[k] = 20;
-              break;
-            }
-          }
-        }
+    }
+    if (dies) break;
+  }
+  if (dies) {
+    // Become a puff of smoke which drifts away
+    grid.elements[i] = E_SMOKE; grid.lifetimes[i] = 100 + randInt(60); grid.temps[i] = 90; grid.flags[i] = 0;
+    return;
+  }
+  // Try to convert one adjacent plant/oil cell into mold (faster when wet, still happens slowly when dry)
+  if (randChance(waterNear ? 0.06 : 0.012)) {
+    const dirs = [[-1,0],[1,0],[0,-1],[0,1],[-1,-1],[1,1],[-1,1],[1,-1]];
+    for (let kk = dirs.length - 1; kk > 0; kk--) {
+      const r = randInt(kk+1); const tmp = dirs[kk]; dirs[kk] = dirs[r]; dirs[r] = tmp;
+    }
+    for (const d of dirs) {
+      const nx = cx + d[0], ny = cy + d[1];
+      if (!cellInBounds(nx, ny)) continue;
+      const k = cellIndex(nx,ny);
+      const ne = grid.elements[k];
+      if (ne === E_PLANT || ne === E_OIL) {
+        grid.elements[k] = E_MOLD; grid.flags[k] = 0; grid.temps[k] = 20;
         break;
       }
     }
   }
 }
 
+
 // Helpers
-function igniteNeighbours(x, y) {
+/**
+ * Handles one element at (x,y) potentially igniting its neighbors.
+ * @param {number} x - x (column) coord
+ * @param {number} y - y (row) coord
+ */
+function igniteNeighbors(x, y) {
   for (let dy = -1; dy <= 1; dy++) {
     for (let dx = -1; dx <= 1; dx++) {
       if (!dx && !dy) continue;
       const nx = x + dx, ny = y + dy;
       if (!cellInBounds(nx, ny)) continue;
+
       const j = cellIndex(nx,ny);
       const ne = grid.elements[j];
-      // heat them up
+      // Heat them up
       grid.temps[j] += 8;
-      // direct ignition chance for flammable elements (IGNITION_CHANCE > 0 means flammable)
-      const ic = IGNITION_CHANCE[ne];
-      if (ic > 0 && randChance(ic * 1.2) && grid.temps[j] >= (BURN_TEMP[ne] - 50)) {
-        grid.elements[j] = E_FIRE; grid.lifetimes[j] = 50 + randInt(50); grid.temps[j] = 500;
+      // Direct ignition chance for flammable elements (IGNITION_CHANCE > 0 means flammable)
+      const ignitionChance = IGNITION_CHANCE[ne];
+      if (ignitionChance > 0 && randChance(ignitionChance * 1.2) && grid.temps[j] >= (BURN_TEMP[ne] - 50)) {
+        grid.elements[j] = E_FIRE;
+        grid.lifetimes[j] = 50 + randInt(50);
+        grid.temps[j] = 500;
       }
-      if (ne === E_GUNPOWDER && randChance(0.3)) grid.temps[j] += 80;
-      if (ne === E_ICE) grid.temps[j] += 6;
+      if (ne === E_GUNPOWDER && randChance(0.3)) {
+        grid.temps[j] += 80;
+      }
+      if (ne === E_ICE) {
+        grid.temps[j] += 6;
+      }
     }
   }
 }
 
-//#endregion Reactions & Helpers
+//endregion Ticking and Reactions
+
+
 
 
 //endregion === Engine ===
@@ -1179,15 +1279,11 @@ function igniteNeighbours(x, y) {
 //#region Simulation
 
 
-
-
-
-
 // Currently NO collision reactions exist, but the system is wired. These are very specific - ONLY when a cell of one
-// element tries to move into the cell contained by a specific other element (impact-triggered, NOT mere adjacency —
-// adjacency reactions like lava+water belong in tickCells). Some interactions only make sense on movement, like
+// element tries to move into the cell contained by a specific other element (impact-triggered, NOT mere adjacency.
+// Adjacency reactions like lava+water belong in tickCells). Some interactions only make sense on movement, like
 // dynamite detonating on impact down the line.
-// Syntax — table of [movingElement]: { [destElement]: handler(i, j) }, e.g.:
+// Syntax: table of [movingElement]: { [destElement]: handler(i, j) }, e.g.:
 //   [E_DYNAMITE]: { [E_WALL]: dynamiteOnImpact },
 const COLLISION_REACTIONS = {
 };
@@ -1195,87 +1291,97 @@ const COLLISION_REACTIONS = {
 
 //#region Movement
 // ---- per-cell movement ----------------------------------------------
+// Pure dispatch on MOVEMENT[e], the element's locomotion archetype (resolved at load — see the Movement
+// archetypes region). KIND no longer drives movement here; static/empty cells simply have no matching case.
 function updateCell(x, y) {
   const i = cellIndex(x, y);
   if (grid.movedThisFrame[i]) return;
   const e = grid.elements[i];
-  if (e === E_EMPTY || e === E_WALL || e === E_GLASS ||
-      e === E_WOOD  || e === E_ICE  || e === E_PLANT || e === E_FUSE ||
-      e === E_MOLD) return;
 
-  // FIRE & SPARK rise + flicker (heat/ignition handled per-tick in tickCells())
-  if (e === E_FIRE || e === E_SPARK) {
-    const dy = randChance(0.7) ? -1 : 0;
-    const dx = randInt(3) - 1;
-    tryMoveOrSwap(i, x + dx, y + dy);
-    return;
-  }
-
-  const kind = KIND[e];
-
-  // SMOKE & STEAM rise
-  if (kind === KIND_GAS) {
-    const dy = randChance(0.85) ? -1 : (randChance(0.5) ? 0 : 1);
-    const dx = randInt(3) - 1;
-    tryMoveOrSwap(i, x + dx, y + dy);
-    return;
-  }
-
-  // POWDERS
-  if (kind === KIND_POWDER) {
-    if (tryFall(i, x, y)) return;
-    return;
-  }
-
-  // LIQUIDS — jump to furthest reachable empty cell so water actually flows fast
-  if (kind === KIND_LIQUID) {
-    if (tryFall(i, x, y)) return;
-    const spread = SPREAD[e] || 3;
-    const dir = randChance(0.5) ? -1 : 1;
-
-    // probe preferred side: walk until blocked, jump to furthest open cell.
-    // also check if a downward path opens along the way — prefer falling.
-    let bestX = x;
-    for (let s = 1; s <= spread; s++) {
-      const nx = x + dir * s;
-      if (!cellInBounds(nx, y)) break;
-      const j = cellIndex(nx,y);
-      if (grid.elements[j] !== E_EMPTY || grid.movedThisFrame[j]) break;
-      bestX = nx;
-      if (y < ROWS - 1) {
-        const below = j + COLS;
-        if (grid.elements[below] === E_EMPTY && !grid.movedThisFrame[below]) {
-          moveCell(i, below); return;
-        }
-      }
-    }
-    if (bestX !== x) { moveCell(i, cellIndex(bestX,y)); return; }
-
-    // other side
-    bestX = x;
-    for (let s = 1; s <= spread; s++) {
-      const nx = x - dir * s;
-      if (!cellInBounds(nx, y)) break;
-      const j = cellIndex(nx,y);
-      if (grid.elements[j] !== E_EMPTY || grid.movedThisFrame[j]) break;
-      bestX = nx;
-      if (y < ROWS - 1) {
-        const below = j + COLS;
-        if (grid.elements[below] === E_EMPTY && !grid.movedThisFrame[below]) {
-          moveCell(i, below); return;
-        }
-      }
-    }
-    if (bestX !== x) { moveCell(i, cellIndex(bestX,y)); return; }
-
-    // single-cell swap fallback (e.g. oil floating on water)
-    tryMoveOrSwap(i, x + dir, y) || tryMoveOrSwap(i, x - dir, y);
+  // === Movement dispatch. Each handler is defined below in the same order as the cases.
+  // (i, x, y) thread the cell's flat index + coords into every handler so they don't recompute them.
+  // `e` is threaded into moveLiquid so it doesn't redo grid.elements[i] for the SPREAD lookup —
+  // direct analogue of the `temp` passthrough in tickCells.
+  switch (MOVEMENT[e]) {
+    case MOVE_FLAME:  moveFlame(i, x, y);     break;
+    case MOVE_GAS:    moveGas(i, x, y);       break;
+    case MOVE_POWDER: movePowder(i, x, y);    break;
+    case MOVE_LIQUID: moveLiquid(i, x, y, e); break;
+    // MOVE_STATIC (walls, wood, ice, …) and empty cells: no case, falls through and returns.
   }
 }
 
+// === Per-archetype movement handlers ===
+// One named function per movement archetype. updateCell dispatches into the right handler via a
+// jump-table switch — each call site is monomorphic, so V8/SpiderMonkey can inline these back into the
+// hot loop. Order below matches the dispatch order in updateCell.
+
+// FLAME — fire & spark: rise and flicker, never sink. (heat/ignition handled per-tick in tickCells)
+function moveFlame(i, x, y) {
+  const dy = randChance(0.7) ? -1 : 0;
+  const dx = randInt(3) - 1;
+  tryMoveOrSwap(i, x + dx, y + dy);
+}
+
+// GAS — smoke & steam: rise hard, occasionally stall or sink, drifting sideways.
+function moveGas(i, x, y) {
+  const dy = randChance(0.85) ? -1 : (randChance(0.5) ? 0 : 1);
+  const dx = randInt(3) - 1;
+  tryMoveOrSwap(i, x + dx, y + dy);
+}
+
+// POWDER — fall straight down, then down-diagonal; piles up.
+function movePowder(i, x, y) {
+  tryFall(i, x, y);
+}
+
+// Sub-helper for moveLiquid: walks horizontally in `dir` until blocked, jumping to the furthest reachable
+// empty cell. Also takes any downward opening along the way (gravity wins). Returns true if the cell moved.
+// Earned its extraction by the iff-reuse rule — 2 call sites in moveLiquid (positive dir, then negative dir).
+function probeSide(i, x, y, dir, spread) {
+  let bestX = x;
+  for (let s = 1; s <= spread; s++) {
+    const nx = x + dir * s;
+    if (!cellInBounds(nx, y)) break;
+    const j = cellIndex(nx, y);
+    if (grid.elements[j] !== E_EMPTY || grid.movedThisFrame[j]) break;
+    bestX = nx;
+    if (y < ROWS - 1) {
+      const below = j + COLS;
+      if (grid.elements[below] === E_EMPTY && !grid.movedThisFrame[below]) {
+        moveCell(i, below);
+        return true;
+      }
+    }
+  }
+  if (bestX !== x) { moveCell(i, cellIndex(bestX, y)); return true; }
+  return false;
+}
+
+// LIQUID — fall first, then flow sideways by jumping to the furthest reachable empty cell so water
+// actually flows fast instead of crawling one cell per frame.
+function moveLiquid(i, x, y, e) {
+  if (tryFall(i, x, y)) return;
+  const spread = SPREAD[e] ?? 3;
+  const dir = randChance(0.5) ? -1 : 1;
+  if (probeSide(i, x, y,  dir, spread)) return;
+  if (probeSide(i, x, y, -dir, spread)) return;
+  // single-cell swap fallback (e.g. oil floating on water)
+  tryMoveOrSwap(i, x + dir, y) || tryMoveOrSwap(i, x - dir, y);
+}
+
+/**
+ * Tries to move a cell's contents (i) down or down-diag
+ * @param {number} i - flat grid index of the current cell
+ * @param {number} x - x (column) coord of the current cell
+ * @param {number} y - y (row) coord of the current cell
+ * @return {boolean} - if the fall/swap was successful
+ */
 function tryFall(i, x, y) {
-  // try down, then down-diag (random L/R first)
+  // First try to move straight down
   if (tryMoveOrSwap(i, x, y + 1)) return true;
+
+  // Then try down-diag if that wasn't successful, with random L/R first
   const d = randChance(0.5) ? -1 : 1;
   if (tryMoveOrSwap(i, x + d, y + 1)) return true;
   // noinspection RedundantIfStatementJS
@@ -1283,38 +1389,68 @@ function tryFall(i, x, y) {
   return false;
 }
 
+/**
+ * Tries to move or swap one cell (i) to another cell (nx, ny), also handling potential
+ * collision reactions.
+ * @param {number} i - flat grid index of the "here" cell
+ * @param {number} nx - x (column) coord of the "there" cell
+ * @param {number} ny - y (row) coord of the "there" cells
+ * @return {boolean} - if any type of move was successful
+ */
 function tryMoveOrSwap(i, nx, ny) {
   if (!cellInBounds(nx, ny)) return false;
+
   const j = cellIndex(nx,ny);
+  // Skip already moved elements
   if (grid.movedThisFrame[j]) return false;
+
   const here = grid.elements[i], there = grid.elements[j];
-  if (there === E_EMPTY) { moveCell(i, j); return true; }
-  // swap by density when both flowing
-  const kindA = KIND[here], kindB = KIND[there];
-  if (kindA === KIND_POWDER || kindA === KIND_LIQUID) {
-    if ((kindB === KIND_LIQUID || kindB === KIND_GAS) && (DENSITY[here] || 9) > DENSITY[there]) {
-      swapCells(i, j); return true;
-    }
+
+  // If `here` is trying to moving into an EMPTY there, it just succeeds automatically.
+  if (there === E_EMPTY) {
+    moveCell(i, j);
+    return true;
   }
-  if (kindA === KIND_GAS) {
-    if ((kindB === KIND_LIQUID || kindB === KIND_GAS) && DENSITY[there] > DENSITY[here]) {
-      swapCells(i, j); return true;
+
+  // Handle any collision reactions
+  const reaction = COLLISION_REACTIONS[here]?.[there];
+  if (reaction) {
+    // Run the collision reaction function if present
+    if (typeof reaction === "function") {
+      return reaction(i, j);
     }
-  }
-  // see Collision Reactions region for the table
-  const rxn = COLLISION_REACTIONS[here]?.[there];
-  if (rxn) {
-    if (typeof rxn === "function") return rxn(i, j);
-    const [resultHere, resultThere, prob] = rxn;
+    // Otherwise resolve its result automatically
+    const [resultHere, resultThere, prob] = reaction;
     if (Math.random() < prob) {
-      grid.elements[i] = resultHere; grid.elements[j] = resultThere;
-      grid.movedThisFrame[i] = 1; grid.movedThisFrame[j] = 1;
+      grid.elements[i] = resultHere;
+      grid.elements[j] = resultThere;
+
+      grid.movedThisFrame[i] = 1;
+      grid.movedThisFrame[j] = 1;
       return true;
     }
-    return false;
+  }
+
+  // Finally, try to swap by density. Note the two branches compare density in OPPOSITE directions —
+  // this is deliberate, not duplication:
+  //   - A powder/liquid is the HEAVY one sinking DOWN into a lighter fluid: swap if DENSITY[here] > DENSITY[there].
+  //   - A gas is the LIGHT one rising UP into a heavier fluid: swap if DENSITY[there] > DENSITY[here].
+  // The gas branch can't be folded into the first: gases move upward, so a gas must initiate its own rise.
+  // Without it, gas-vs-gas density stratification silently breaks (a heavy gas would never sink below a light one).
+  const kindHere = KIND[here], kindThere = KIND[there];
+  if (kindHere === KIND_POWDER || kindHere === KIND_LIQUID) {
+    if ((kindThere === KIND_LIQUID || kindThere === KIND_GAS) && DENSITY[here] > DENSITY[there]) {
+      swapCells(i, j); return true;
+    }
+  }
+  if (kindHere === KIND_GAS) {
+    if ((kindThere === KIND_LIQUID || kindThere === KIND_GAS) && DENSITY[there] > DENSITY[here]) {
+      swapCells(i, j); return true;
+    }
   }
   return false;
 }
+
 //#endregion
 
 //#endregion
