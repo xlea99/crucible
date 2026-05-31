@@ -310,7 +310,7 @@ const KIND_GAS     = 4;
 // How an element locomotes on its OWN turn, which is a separate axis from KIND. For most elements movement is
 // implied by KIND (a powder falls, a liquid flows, a gas rises), so they declare nothing and MOVEMENT is
 // derived from KIND at load time. Only genuinely exotic movers override it with an explicit movement
-// field (fire, for example). updateCell dispatches on MOVEMENT[e] as a jump table, so a
+// field (fire, for example). moveCells dispatches on MOVEMENT[e] as a jump table, so a
 // new exotic mover costs one constant + one case and never taxes the common cells.
 // ** DEFAULTS **
 const MOVE_STATIC  = 0;   // no locomotion (walls, wood, ice, …); also the default for empty cells
@@ -494,6 +494,7 @@ const grid = {
   flags: new Uint8Array(GRID_SIZE),
 
   // Throwaway scratch memory
+  tickedThisFrame : new Uint8Array(GRID_SIZE),
   movedThisFrame : new Uint8Array(GRID_SIZE),
   tempsBuffer : new Int16Array(GRID_SIZE)
 }
@@ -639,28 +640,50 @@ function swapCells(i, j) {
 // =====================================================================
 //region === Engine ===
 
+
 let frame = 0;
+/**
+ * Advances a single step (frame) and handle heat diffusion, ticking every cell for reactions, and movement.
+ */
 function step() {
   // Advance a single frame.
   frame++;
 
-  // Since we are now on a new frame, ALL cells are initially considered to have not yet moved this frame.
+  // Since we are now on a new frame, ALL cells are initially considered to have not yet ticked or moved this frame.
   grid.movedThisFrame.fill(0);
+  grid.tickedThisFrame.fill(0);
+  // Also, copy over last frame's temperatures to the buffer.
+  grid.tempsBuffer.set(grid.temps);
 
-  // 1) Heat diffusion: simple averaging with neighbors. Done as a separate pass so order doesn't bias temperatures.
-  diffuseHeat();
-
-  // 2) Tick cells: environment/state driven changes to individual cells before reactions
-  tickCells();
-
-  // 3) Movement: bottom-up, with alternating L/R scan to avoid bias.
+  // Which direction we're going first for alternating cell visits
   const leftFirst = (frame & 1) === 0;
+
+  // 1) Heat diffusion: Top down, L->R. Simple averaging with neighbors. Done as a separate pass so order doesn't
+  // bias temperatures.
+  for (let y = 0; y <= ROWS - 1; y++) {
+    for (let x = 0; x < COLS; x++) diffuseCellHeat(x, y);
+  }
+
+  // 2) Tick cells: Alternating up/down, alternating L/R. Environment/state driven changes to individual cells
+  // before reactions
+  if (leftFirst) {
+    for (let y = 0; y <= ROWS - 1; y++) {
+      for (let x = 0; x < COLS; x++) tickCell(x, y);
+    }
+  }
+  else {
+    for (let y = ROWS - 1; y >= 0; y--) {
+      for (let x = COLS - 1; x >= 0; x--) tickCell(x, y);
+    }
+  }
+
+  // 3) Movement: Bottom up, alternating L/R. Handles cell movement and collision.
   for (let y = ROWS - 1; y >= 0; y--) {
     if (leftFirst) {
-      for (let x = 0; x < COLS; x++) updateCell(x, y);
+      for (let x = 0; x < COLS; x++) updateCellMovement(x, y);
     }
     else {
-      for (let x = COLS - 1; x >= 0; x--) updateCell(x, y);
+      for (let x = COLS - 1; x >= 0; x--) updateCellMovement(x, y);
     }
   }
 }
@@ -675,8 +698,10 @@ function step() {
 /**
  * We sample each cell's neighbors and pull a fraction of their temp toward
  * ours. Use the previous-frame temps via copy to avoid order bias.
+ * @param {number} x - x (column) coord
+ * @param {number} y - y (row) coord
  */
-function diffuseHeat() {
+function diffuseCellHeat(x,y) {
   // TODO: HEAT SYSTEM OVERHAUL (deep dive)
   // The current heat system is data-driven on these three
   // properties, but the underlying physics is approximate:
@@ -688,54 +713,45 @@ function diffuseHeat() {
   //   - The ambient bleed numbers are tuned by vibe, not derived
   // Revisit: convection model, latent heat bookkeeping, possibly separate the
   // gas-phase logic into its own pass. Tune numbers via playtest, not derivation.
+  const i = cellIndex(x, y);
+  const thisElement = grid.elements[i];
 
+  // Thermal mass — how strongly a cell resists temperature change. Higher means
+  // the cell's own temperature dominates the neighbor-average. ICE=24 (very
+  // resistant, persists in warm air), STONE=8, WALL/GLASS=10, default=4.
+  const selfW = M_THERMAL_MASS[thisElement];
 
-  // First, copy over last frame's temperatures to the buffer.
-  grid.tempsBuffer.set(grid.temps);
-
-  for (let y = 0; y < ROWS; y++) {
-    for (let x = 0; x < COLS; x++) {
-      const i = cellIndex(x, y);
-      const thisElement = grid.elements[i];
-
-      // Thermal mass — how strongly a cell resists temperature change. Higher means
-      // the cell's own temperature dominates the neighbour-average. ICE=24 (very
-      // resistant, persists in warm air), STONE=8, WALL/GLASS=10, default=4.
-      const selfW = M_THERMAL_MASS[thisElement];
-
-      let sum = grid.tempsBuffer[i] * selfW;
-      let n = selfW;
-      if (x > 0)        {
-        sum += grid.tempsBuffer[i - 1];
-        n++;
-      }
-      if (x < COLS - 1) {
-        sum += grid.tempsBuffer[i + 1];
-        n++;
-      }
-      if (y > 0)        {
-        sum += grid.tempsBuffer[i - COLS];
-        n++;
-      }
-      if (y < ROWS - 1) {
-        sum += grid.tempsBuffer[i + COLS];
-        n++;
-      }
-
-      let avg = sum / n;
-      // ambient bleed, different elements equilibrate toward different temps
-      if (thisElement === E_EMPTY) {
-        avg = avg * 0.90 + 20 * 0.10;            // air cools fast to 20
-      } else if (thisElement === E_WATER) {
-        avg = avg * 0.97 + 20 * 0.03;            // water bleeds slowly to 20
-      } else if (thisElement === E_ICE) {
-        avg = avg * 0.85 + (-10) * 0.15;          // ice actively maintains coldness
-      } else if (thisElement === E_STEAM || thisElement === E_SMOKE) {
-        avg = grid.tempsBuffer[i] * 0.7 + avg * 0.3;       // gases hold heat, no ambient bleed
-      }
-      grid.temps[i] = avg | 0;
-    }
+  let sum = grid.tempsBuffer[i] * selfW;
+  let n = selfW;
+  if (x > 0)        {
+    sum += grid.tempsBuffer[i - 1];
+    n++;
   }
+  if (x < COLS - 1) {
+    sum += grid.tempsBuffer[i + 1];
+    n++;
+  }
+  if (y > 0)        {
+    sum += grid.tempsBuffer[i - COLS];
+    n++;
+  }
+  if (y < ROWS - 1) {
+    sum += grid.tempsBuffer[i + COLS];
+    n++;
+  }
+
+  let avg = sum / n;
+  // ambient bleed, different elements equilibrate toward different temps
+  if (thisElement === E_EMPTY) {
+    avg = avg * 0.90 + 20 * 0.10;            // air cools fast to 20
+  } else if (thisElement === E_WATER) {
+    avg = avg * 0.97 + 20 * 0.03;            // water bleeds slowly to 20
+  } else if (thisElement === E_ICE) {
+    avg = avg * 0.85 + (-10) * 0.15;          // ice actively maintains coldness
+  } else if (thisElement === E_STEAM || thisElement === E_SMOKE) {
+    avg = grid.tempsBuffer[i] * 0.7 + avg * 0.3;       // gases hold heat, no ambient bleed
+  }
+  grid.temps[i] = avg | 0;
 }
 
 //endregion Subsystems
@@ -754,50 +770,53 @@ function diffuseHeat() {
  * every case is a one-line call to a named handler. Adding a new element behavior = one case + one tickFoo
  * function, and nothing else.
  */
-function tickCells() {
-  for (let i = 0; i < GRID_SIZE; i++) {
-    const thisElement = grid.elements[i];
-    // Nothing to tick if this cell is empty.
-    if (thisElement === E_EMPTY) continue;
+function tickCell(x, y) {
+  const i = cellIndex(x,y)
+  // If the cell has already been ticked this frame, skip it.
+  if (grid.tickedThisFrame[i]) return;
+  // No matter what reaction happened (or didn't), we consider the attempt ticked regardless.
+  grid.tickedThisFrame[i] = 1;
 
-    // Get any needed attributes of this cell.
-    const temp = grid.temps[i];
+  const thisElement = grid.elements[i];
+  // Nothing to tick if this cell is empty.
+  if (thisElement === E_EMPTY) return;
 
-    //=== Generic data-driven properties get handled first ===
+  // Get any needed attributes of this cell.
+  const temp = grid.temps[i];
 
-    // Ignition/flammability
-    if (M_IGNITION_CHANCE[thisElement] > 0 && temp >= M_BURN_TEMP[thisElement] && randChance(M_IGNITION_CHANCE[thisElement])) {
-      grid.elements[i] = E_FIRE;
-      grid.lifetimes[i] = M_LIFETIME[E_FIRE] + randInt(60)
-      grid.temps[i] = 500;
-      continue;
-    }
+  //=== Generic data-driven properties get handled first ===
 
-    // === Element-specific dispatch. Each handler is defined below in the same order as the cases.
-    // `temp` is threaded into handlers that read it, so they don't redo grid.temps[i]. The typed-array
-    // read is cheap but happens per active cell per frame, and on a screen-of-water that adds up.
-    switch (thisElement) {
-      case E_WATER:     tickWater(i, temp);     break;
-      case E_STEAM:     tickSteam(i, temp);     break;
-      case E_ICE:       tickIce(i, temp);       break;
-      case E_LAVA:      tickLava(i, temp);      break;
-      case E_STONE:     tickStone(i, temp);     break;
-      case E_SAND:      tickSand(i, temp);      break;
-      case E_GLASS:     tickGlass(i, temp);     break;
-      case E_FIRE:      tickFire(i);            break;
-      case E_SMOKE:     tickSmoke(i);           break;
-      case E_EMBER:     tickEmber(i);           break;
-      case E_SPARK:     tickSpark(i);           break;
-      case E_GUNPOWDER: tickGunpowder(i, temp); break;
-      case E_PLANT:     tickPlant(i);           break;
-      case E_FUSE:      tickFuse(i, temp);      break;
-      case E_ACID:      tickAcid(i);            break;
-      case E_SALT:      tickSalt(i);            break;
-      case E_MOLD:      tickMold(i);            break;
-    }
+  // Ignition/flammability
+  if (M_IGNITION_CHANCE[thisElement] > 0 && temp >= M_BURN_TEMP[thisElement] && randChance(M_IGNITION_CHANCE[thisElement])) {
+    grid.elements[i] = E_FIRE;
+    grid.lifetimes[i] = M_LIFETIME[E_FIRE] + randInt(60)
+    grid.temps[i] = 500;
+    return;
+  }
+
+  // === Element-specific dispatch. Each handler is defined below in the same order as the cases.
+  // `temp` is threaded into handlers that read it, so they don't redo grid.temps[i]. The typed-array
+  // read is cheap but happens per active cell per frame, and on a screen-of-water that adds up.
+  switch (thisElement) {
+    case E_WATER:     tickWater(i, temp);     break;
+    case E_STEAM:     tickSteam(i, temp);     break;
+    case E_ICE:       tickIce(i, temp);       break;
+    case E_LAVA:      tickLava(i, x, y, temp);      break;
+    case E_STONE:     tickStone(i, temp);     break;
+    case E_SAND:      tickSand(i, temp);      break;
+    case E_GLASS:     tickGlass(i, temp);     break;
+    case E_FIRE:      tickFire(i, x, y);            break;
+    case E_SMOKE:     tickSmoke(i);           break;
+    case E_EMBER:     tickEmber(i);           break;
+    case E_SPARK:     tickSpark(i, x, y);           break;
+    case E_GUNPOWDER: tickGunpowder(i, x, y, temp); break;
+    case E_PLANT:     tickPlant(i, x, y);           break;
+    case E_FUSE:      tickFuse(i, x, y, temp);      break;
+    case E_ACID:      tickAcid(i, x, y);            break;
+    case E_SALT:      tickSalt(i, x, y);            break;
+    case E_MOLD:      tickMold(i, x, y);            break;
   }
 }
-
 
 // === Per-element tick handlers ===
 
@@ -841,9 +860,7 @@ function tickIce(i, temp) {
 }
 
 // Quenching on water contact, self-heating, and cooling down enough to harden to STONE.
-function tickLava(i, temp) {
-  const cx = cellX(i), cy = cellY(i);
-
+function tickLava(i, x, y, temp) {
   // Quench: find an adjacent (cardinal) water cell. Lava touching water reacts on contact —
   // this lava cell becomes STONE, the water becomes STEAM, and nearby lava crusts over.
   // ADJACENCY reaction (fires whenever lava touches water, settled or not); relocated from
@@ -851,30 +868,44 @@ function tickLava(i, temp) {
   const dirs = [[0, -1], [0, 1], [-1, 0], [1, 0]];   // up, down, left, right
   let waterI = -1;
   for (const [dx, dy] of dirs) {
-    const nx = cx + dx, ny = cy + dy;
+    const nx = x + dx, ny = y + dy;
     if (!cellInBounds(nx, ny)) continue;
     const k = cellIndex(nx, ny);
-    if (grid.elements[k] === E_WATER) { waterI = k; break; }
+    if (grid.elements[k] === E_WATER) {
+      waterI = k;
+      break; }
   }
 
   if (waterI !== -1) {
     // React: this lava → STONE, the contacted water → STEAM.
-    grid.elements[i] = E_STONE;      grid.temps[i] = 380;        grid.lifetimes[i] = 0;
-    grid.elements[waterI] = E_STEAM; grid.temps[waterI] = 150;   grid.lifetimes[waterI] = 800 + randInt(400);
-    grid.movedThisFrame[i] = 1;      grid.movedThisFrame[waterI] = 1;
+    grid.elements[i] = E_STONE;
+    grid.temps[i] = 380;
+    grid.lifetimes[i] = 0;
+
+    grid.elements[waterI] = E_STEAM;
+    grid.temps[waterI] = 150;
+    grid.lifetimes[waterI] = 800 + randInt(400);
+
+    grid.movedThisFrame[i] = 1;
+    grid.movedThisFrame[waterI] = 1;
+    grid.tickedThisFrame[waterI] = 1;
 
     // Crust nearby lava — quench radius 2 with falloff, so a sea pour makes a thick crust.
     for (let dy = -2; dy <= 2; dy++) {
       for (let dx = -2; dx <= 2; dx++) {
         if (!dx && !dy) continue;
-        const nx = cx + dx, ny = cy + dy;
+        const nx = x + dx, ny = y + dy;
         if (!cellInBounds(nx, ny)) continue;
         const k = cellIndex(nx, ny);
         if (grid.elements[k] === E_LAVA) {
           const dist = Math.abs(dx) + Math.abs(dy);
           const p = dist === 1 ? 0.55 : dist === 2 ? 0.22 : 0.08;
           if (Math.random() < p) {
-            grid.elements[k] = E_STONE; grid.temps[k] = 360; grid.lifetimes[k] = 0; grid.movedThisFrame[k] = 1;
+            grid.elements[k] = E_STONE;
+            grid.temps[k] = 360;
+            grid.lifetimes[k] = 0;
+            grid.movedThisFrame[k] = 1;
+            grid.tickedThisFrame[k] = 1;
           } else {
             grid.temps[k] -= 30;   // cool the rest a bit
           }
@@ -891,7 +922,11 @@ function tickLava(i, temp) {
         if (!cellInBounds(nx, ny)) continue;
         const k = cellIndex(nx, ny);
         if (grid.elements[k] === E_EMPTY && Math.random() < 0.45) {
-          grid.elements[k] = E_STEAM; grid.temps[k] = 140; grid.lifetimes[k] = 600 + randInt(400); grid.movedThisFrame[k] = 1;
+          grid.elements[k] = E_STEAM;
+          grid.temps[k] = 140;
+          grid.lifetimes[k] = 600 + randInt(400);
+          grid.movedThisFrame[k] = 1;
+          grid.tickedThisFrame[k] = 1;
         }
       }
     }
@@ -935,7 +970,7 @@ function tickGlass(i, temp) {
 }
 
 // Fire dies down naturally pretty quick.
-function tickFire(i) {
+function tickFire(i, x, y) {
   // Handle the fire dying down naturally
   if (--grid.lifetimes[i] <= 0) {
     // 40% chance to create smoke on dying down
@@ -953,7 +988,7 @@ function tickFire(i) {
     grid.temps[i] = 500 + randInt(120);
 
     // Handle igniting neighbors
-    igniteNeighbors(cellX(i), cellY(i));
+    igniteNeighbors(x, y);
 
     // Test whats above the fire cell
     if (i >= COLS) {
@@ -964,11 +999,13 @@ function tickFire(i) {
           grid.elements[j] = E_SMOKE;
           grid.lifetimes[j] = 80 + randInt(60);
           grid.temps[j] = 90;
+          grid.tickedThisFrame[j] = 1;
         }
         else if (randChance(0.06)) {
           grid.elements[j] = E_EMBER;
           grid.lifetimes[j] = 14 + randInt(14);
           grid.temps[j] = 380;
+          grid.tickedThisFrame[j] = 1;
         }
       }
     }
@@ -993,32 +1030,42 @@ function tickEmber(i) {
 }
 
 // TODO Gonna fully rewrite Spark, its just a weird fire that travels through water as is. COME BACK HERE
-function tickSpark(i) {
-  if (grid.movedThisFrame[i]) return;  // freshly spawned this frame — let it decay/spread next frame
+function tickSpark(i, x, y) {
   if (--grid.lifetimes[i] <= 0) { clearCell(i); return; }
   grid.temps[i] = 600;
-  const xs = cellX(i), ys = cellY(i);
-  igniteNeighbors(xs, ys);
-  // CONDUCT through water: jump into a random water neighbour, leaving water behind.
+  igniteNeighbors(x, y);
+  // CONDUCT through water: jump into a random water neighbor, leaving water behind.
   const dirs = [[-1,0],[1,0],[0,-1],[0,1]];
   for (let k = dirs.length - 1; k > 0; k--) {
-    const r = randInt(k+1); const tmp = dirs[k]; dirs[k] = dirs[r]; dirs[r] = tmp;
+    const r = randInt(k+1);
+    const tmp = dirs[k];
+    dirs[k] = dirs[r];
+    dirs[r] = tmp;
   }
   for (let k = 0; k < dirs.length; k++) {
-    const nx = xs + dirs[k][0], ny = ys + dirs[k][1];
+    const nx = x + dirs[k][0], ny = y + dirs[k][1];
     if (!cellInBounds(nx, ny)) continue;
     const j = cellIndex(nx,ny);
     if (grid.elements[j] === E_WATER) {
-      grid.elements[j] = E_SPARK; grid.lifetimes[j] = 6 + randInt(4); grid.temps[j] = 600; grid.movedThisFrame[j] = 1;
-      grid.elements[i] = E_WATER; grid.lifetimes[i] = 0; grid.temps[i] = 30;
+      grid.elements[j] = E_SPARK;
+      grid.lifetimes[j] = 6 + randInt(4);
+      grid.temps[j] = 600;
+      grid.movedThisFrame[j] = 1;
+      grid.tickedThisFrame[j] = 1;
+
+      grid.elements[i] = E_WATER;
+      grid.lifetimes[i] = 0;
+      grid.temps[i] = 30;
       break;
     }
-    if (grid.elements[j] === E_GUNPOWDER) { grid.temps[j] += 220; }
+    if (grid.elements[j] === E_GUNPOWDER) {
+      grid.temps[j] += 220;
+    }
   }
 }
 
 // Handle detonation.
-function tickGunpowder(i, temp) {
+function tickGunpowder(i, x, y, temp) {
   if (temp >= M_DETONATE_AT_TEMP[grid.elements[i]]) {
     // BOOM: convert to fire + spark, push neighbors
     grid.elements[i] = E_FIRE;
@@ -1026,10 +1073,9 @@ function tickGunpowder(i, temp) {
     grid.temps[i] = 700;
 
     // Look at all 8 neighbors and either ignite or potentially spawn fire.
-    const cx = cellX(i), cy = cellY(i);
     for (let dy = -1; dy <= 1; dy++) {
       for (let dx = -1; dx <= 1; dx++) {
-        const xx = cx + dx, yy = cy + dy;
+        const xx = x + dx, yy = y + dy;
         if (!cellInBounds(xx, yy)) {
           continue;
         }
@@ -1043,6 +1089,7 @@ function tickGunpowder(i, temp) {
             grid.elements[j] = E_FIRE;
             grid.lifetimes[j] = 20 + randInt(20);
             grid.temps[j] = 600;
+            grid.tickedThisFrame[j] = 1;
           }
         } else {
           grid.temps[j] += 200;
@@ -1053,18 +1100,19 @@ function tickGunpowder(i, temp) {
 }
 
 // Growing when near water.
-function tickPlant(i) {
+function tickPlant(i, x, y) {
   // Grow toward adjacent empty cells if water nearby; slow rate
   if (!randChance(0.02)) return;
   if ((grid.flags[i] || 0) > 14) return;  // age cap so plants don't fill the world
-  const x = cellX(i), y = cellY(i);
   // Find water neighbor within radius 2
   let hasWater = false;
   for (let dy = -2; dy <= 2 && !hasWater; dy++) {
     for (let dx = -2; dx <= 2 && !hasWater; dx++) {
       const xx = x + dx, yy = y + dy;
       if (!cellInBounds(xx, yy)) continue;
-      if (grid.elements[cellIndex(xx,yy)] === E_WATER) hasWater = true;
+      if (grid.elements[cellIndex(xx,yy)] === E_WATER) {
+        hasWater = true;
+      }
     }
   }
   if (!hasWater) return;
@@ -1076,7 +1124,10 @@ function tickPlant(i) {
     if (!cellInBounds(xx, yy)) continue;
     const j = cellIndex(xx,yy);
     if (grid.elements[j] === E_EMPTY || grid.elements[j] === E_WATER) {
-      grid.elements[j] = E_PLANT; grid.temps[j] = 20; grid.flags[j] = (grid.flags[i] || 0) + 1;
+      grid.elements[j] = E_PLANT;
+      grid.temps[j] = 20;
+      grid.flags[j] = (grid.flags[i] || 0) + 1;
+      grid.tickedThisFrame[j] = 1;
       if ((grid.flags[j] || 0) > 18) {
         grid.flags[j] = 18;   // age cap
       }
@@ -1086,7 +1137,7 @@ function tickPlant(i) {
 }
 
 // Fuse gets lit when either hot enough OR adjacent to fire/spark/lit fuse, and handles burning out.
-function tickFuse(i, temp) {
+function tickFuse(i, x, y, temp) {
   // Fuse lights when hot OR adjacent to fire/spark/lit fuse
   const lit = grid.flags[i] === 1;
   // Handle unlit fuse
@@ -1094,11 +1145,10 @@ function tickFuse(i, temp) {
     let ignite = temp >= 150;
     // If not already ignited, check for cardinal/diagonal adjacency that could possibly ignite.
     if (!ignite) {
-      const cx = cellX(i), cy = cellY(i);
       for (let dy = -1; dy <= 1 && !ignite; dy++) {
         for (let dx = -1; dx <= 1 && !ignite; dx++) {
           if (!dx && !dy) continue;
-          const xx = cx + dx, yy = cy + dy;
+          const xx = x + dx, yy = y + dy;
           if (!cellInBounds(xx, yy)) continue;
 
           const j = cellIndex(xx,yy);
@@ -1126,16 +1176,18 @@ function tickFuse(i, temp) {
     grid.temps[i] = 320;
     if (--grid.lifetimes[i] <= 0) {
       // emit a small ember above if room, then become empty (or smoke briefly)
-      const xs = cellX(i), ys = cellY(i);
-      if (ys > 0 && grid.elements[i - COLS] === E_EMPTY) {
+      if (y > 0 && grid.elements[i - COLS] === E_EMPTY) {
         const j = i - COLS;
-        grid.elements[j] = E_EMBER; grid.lifetimes[j] = 20 + randInt(20); grid.temps[j] = 380;
+        grid.elements[j] = E_EMBER;
+        grid.lifetimes[j] = 20 + randInt(20);
+        grid.temps[j] = 380;
+        grid.tickedThisFrame[j] = 1;
       }
       // Ignite touching detonatable elements directly
       for (let dy = -1; dy <= 1; dy++) {
         for (let dx = -1; dx <= 1; dx++) {
           if (!dx && !dy) continue;
-          const nx = xs + dx, ny = ys + dy;
+          const nx = x + dx, ny = y + dy;
           if (!cellInBounds(nx, ny)) continue;
           const j = cellIndex(nx,ny);
           if (M_DETONATE_AT_TEMP[grid.elements[j]] > 0) {
@@ -1149,13 +1201,13 @@ function tickFuse(i, temp) {
 }
 
 // Acid EATS ALL (except glass etc).
-function tickAcid(i) {
+function tickAcid(i, x, y) {
   // Try to dissolve a random cardinal neighbor
   const dirs = [[0, 1], [0, -1], [-1, 0], [1, 0]];
   for (let k = 0; k < 6; k++) {
     // Pick a random direction to potentially CONSUME
     const d = dirs[randInt(4)];
-    const nx = cellX(i) + d[0], ny = cellY(i) + d[1];
+    const nx = x + d[0], ny = y + d[1];
     if (!cellInBounds(nx, ny)) continue;
 
     // Now CONSUME IT (if valid to be consumed)
@@ -1164,26 +1216,29 @@ function tickAcid(i) {
     if (ne === E_EMPTY || ne === E_ACID || ne === E_WALL || ne === E_GLASS) continue;
     if (randChance(0.06)) {
       clearCell(j);
+      grid.tickedThisFrame[j] = 1;
       // chance acid is consumed
       if (randChance(0.4)) {
         clearCell(i);
+        return;
       }
     }
   }
 }
 
 // Melts ice on contact, slowly dissolves into water.
-function tickSalt(i) {
+function tickSalt(i, x, y) {
   // Scan 8 neighbors, then either melt nearby ice or dissolve into water.
-  const cx = cellX(i), cy = cellY(i);
   for (let dy = -1; dy <= 1; dy++) {
     for (let dx = -1; dx <= 1; dx++) {
       if (!dx && !dy) continue;
-      const nx = cx + dx, ny = cy + dy;
+      const nx = x + dx, ny = y + dy;
       if (!cellInBounds(nx, ny)) continue;
       const k = cellIndex(nx,ny);
       if (grid.elements[k] === E_ICE && randChance(0.25)) {
-        grid.elements[k] = E_WATER; grid.temps[k] = 5;
+        grid.elements[k] = E_WATER;
+        grid.temps[k] = 5;
+        grid.tickedThisFrame[k] = 1;
       }
       else if (grid.elements[k] === E_WATER && randChance(0.04)) {
         clearCell(i);
@@ -1195,14 +1250,13 @@ function tickSalt(i) {
 
 // Spreads onto wet plants and oil; converts adjacent plants/oil to mold;
 // dies into a puff of dust/smoke when touched by fire or lava.
-function tickMold(i) {
-  const cx = cellX(i), cy = cellY(i);
+function tickMold(i, x, y) {
   let dies = false;
   let waterNear = false;
   for (let dy = -1; dy <= 1; dy++) {
     for (let dx = -1; dx <= 1; dx++) {
       if (!dx && !dy) continue;
-      const nx = cx + dx, ny = cy + dy;
+      const nx = x + dx, ny = y + dy;
       if (!cellInBounds(nx, ny)) continue;
       const k = cellIndex(nx,ny);
       const ne = grid.elements[k];
@@ -1218,7 +1272,10 @@ function tickMold(i) {
   }
   if (dies) {
     // Become a puff of smoke which drifts away
-    grid.elements[i] = E_SMOKE; grid.lifetimes[i] = 100 + randInt(60); grid.temps[i] = 90; grid.flags[i] = 0;
+    grid.elements[i] = E_SMOKE;
+    grid.lifetimes[i] = 100 + randInt(60);
+    grid.temps[i] = 90;
+    grid.flags[i] = 0;
     return;
   }
   // Try to convert one adjacent plant/oil cell into mold (faster when wet, still happens slowly when dry)
@@ -1228,12 +1285,15 @@ function tickMold(i) {
       const r = randInt(kk+1); const tmp = dirs[kk]; dirs[kk] = dirs[r]; dirs[r] = tmp;
     }
     for (const d of dirs) {
-      const nx = cx + d[0], ny = cy + d[1];
+      const nx = x + d[0], ny = y + d[1];
       if (!cellInBounds(nx, ny)) continue;
       const k = cellIndex(nx,ny);
       const ne = grid.elements[k];
       if (ne === E_PLANT || ne === E_OIL) {
-        grid.elements[k] = E_MOLD; grid.flags[k] = 0; grid.temps[k] = 20;
+        grid.elements[k] = E_MOLD;
+        grid.flags[k] = 0;
+        grid.temps[k] = 20;
+        grid.tickedThisFrame[k] = 1;
         break;
       }
     }
@@ -1264,6 +1324,7 @@ function igniteNeighbors(x, y) {
         grid.elements[j] = E_FIRE;
         grid.lifetimes[j] = 50 + randInt(50);
         grid.temps[j] = 500;
+        grid.tickedThisFrame[j] = 1;
       }
       if (ne === E_GUNPOWDER && randChance(0.3)) {
         grid.temps[j] += 80;
@@ -1299,10 +1360,15 @@ const COLLISION_REACTIONS = {
 
 
 //#region Movement
-// ---- per-cell movement ----------------------------------------------
+
 // Pure dispatch on MOVEMENT[e], the element's locomotion archetype (resolved at load — see the Movement
 // archetypes region). KIND no longer drives movement here; static/empty cells simply have no matching case.
-function updateCell(x, y) {
+/**
+ *
+ * @param {number} x -
+ * @param {number} y
+ */
+function updateCellMovement(x, y) {
   const i = cellIndex(x, y);
   if (grid.movedThisFrame[i]) return;
   const e = grid.elements[i];
@@ -1316,14 +1382,14 @@ function updateCell(x, y) {
     case MOVE_GAS:    moveGas(i, x, y);       break;
     case MOVE_POWDER: movePowder(i, x, y);    break;
     case MOVE_LIQUID: moveLiquid(i, x, y, e); break;
-    // MOVE_STATIC (walls, wood, ice, …) and empty cells: no case, falls through and returns.
+    // MOVE_STATIC (walls, wood, ice, empty cells) has no case, since they just chill
   }
 }
 
 // === Per-archetype movement handlers ===
-// One named function per movement archetype. updateCell dispatches into the right handler via a
+// One named function per movement archetype. moveCells dispatches into the right handler via a
 // jump-table switch — each call site is monomorphic, so V8/SpiderMonkey can inline these back into the
-// hot loop. Order below matches the dispatch order in updateCell.
+// hot loop. Order below matches the dispatch order in moveCells.
 
 // FLAME — fire & spark: rise and flicker, never sink. (heat/ignition handled per-tick in tickCells)
 function moveFlame(i, x, y) {
