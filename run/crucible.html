@@ -691,7 +691,7 @@ function step() {
 
 
 // =====================================================================
-//           Engine Subsystems - Heat diffusion
+//           Cell Subsystems - Heat diffusion
 // =====================================================================
 //region Subsystems
 
@@ -759,7 +759,7 @@ function diffuseCellHeat(x,y) {
 
 
 // =====================================================================
-//           Engine Ticking and Reactions - tickCells, Contact Reactions, Reaction Helpers
+//           Cell Ticking and Reactions - tickCells, Contact Reactions, Reaction Helpers
 // =====================================================================
 //region Ticking and Reactions
 
@@ -824,7 +824,12 @@ function tickCell(x, y) {
 // jump-table switch — each call site is monomorphic, so V8/SpiderMonkey either inline these back into the
 // hot loop (zero overhead) or emit a cheap call (~ns). Order below matches the dispatch order in tickCells.
 
-// Evaporation to STEAM and freezing to ICE.
+
+/**
+ * Evaporation to STEAM and freezing to ICE.
+ * @param {number} i - flat grid index
+ * @param {number} temp - temperature
+ */
 function tickWater(i, temp) {
   // Evaporation
   if (temp >= 100) {
@@ -838,7 +843,11 @@ function tickWater(i, temp) {
   }
 }
 
-// Precipitation to WATER, and dissipates to nothing.
+/**
+ * Precipitation to WATER, and dissipates to nothing.
+ * @param {number} i - flat grid index
+ * @param {number} temp - temperature
+ */
 function tickSteam(i, temp) {
   // Precipitation
   if (temp < 60) {
@@ -852,14 +861,25 @@ function tickSteam(i, temp) {
   }
 }
 
-// Melting to WATER.
+/**
+ * Melting to WATER.
+ * @param {number} i - flat grid index
+ * @param {number} temp - temperature
+ */
 function tickIce(i, temp) {
   if (temp >= 1) {
     grid.elements[i] = E_WATER;
   }
 }
 
-// Quenching on water contact, self-heating, and cooling down enough to harden to STONE.
+
+/**
+ * Quenching on water contact, self-heating, and cooling down enough to harden to STONE.
+ * @param {number} i - flat grid index
+ * @param {number} x - x (column) coord
+ * @param {number} y - y (row) coord
+ * @param {number}temp - temperature
+ */
 function tickLava(i, x, y, temp) {
   // Quench: find an adjacent (cardinal) water cell. Lava touching water reacts on contact —
   // this lava cell becomes STONE, the water becomes STEAM, and nearby lava crusts over.
@@ -940,7 +960,11 @@ function tickLava(i, x, y, temp) {
   }
 }
 
-// Melting to LAVA.
+/**
+ * Melting to LAVA.
+ * @param {number} i - flat grid index
+ * @param {number}temp - temperature
+ */
 function tickStone(i, temp) {
   if (temp >= 1100) {
     grid.elements[i] = E_LAVA;
@@ -948,7 +972,11 @@ function tickStone(i, temp) {
   }
 }
 
-// Blasting to GLASS.
+/**
+ * Blasting to GLASS
+ * @param {number} i - flat grid index
+ * @param {number}temp - temperature
+ */
 function tickSand(i, temp) {
   if (temp >= 700) {
     grid.elements[i] = E_GLASS;
@@ -956,7 +984,11 @@ function tickSand(i, temp) {
   }
 }
 
-// Melting to LAVA.
+/**
+ * Melting to LAVA
+ * @param {number} i - flat grid index
+ * @param {number}temp - temperature
+ */
 function tickGlass(i, temp) {
   if (temp >= 1000) {
     grid.elements[i] = E_LAVA;
@@ -964,7 +996,12 @@ function tickGlass(i, temp) {
   }
 }
 
-// Fire dies down naturally pretty quick.
+/**
+ * Fire dies down naturally pretty quick.
+ * @param {number} i - flat grid index
+ * @param {number} x - x (column) coord
+ * @param {number} y - y (row) coord
+ */
 function tickFire(i, x, y) {
   // Handle the fire dying down naturally
   if (--grid.lifetimes[i] <= 0) {
@@ -1007,14 +1044,20 @@ function tickFire(i, x, y) {
   }
 }
 
-// Smoke dissipates.
+/**
+ * Smoke dissipates.
+ * @param {number} i - flat grid index
+ */
 function tickSmoke(i) {
   if (--grid.lifetimes[i] <= 0) {
     clearCell(i);
   }
 }
 
-// Embers dissipate, or hold their temp.
+/**
+ * Embers dissipate, or hold their temp.
+ * @param {number} i - flat grid index
+ */
 function tickEmber(i) {
   if (--grid.lifetimes[i] <= 0) {
     clearCell(i);
@@ -1024,7 +1067,12 @@ function tickEmber(i) {
   }
 }
 
-// TODO Gonna fully rewrite Spark, its just a weird fire that travels through water as is. COME BACK HERE
+/**
+ * TODO gonna fully rewrite spark, its just a weird fire that travels through water as is COME BACK HERE
+ * @param {number} i - flat grid index
+ * @param {number} x - x (column) coord
+ * @param {number} y - y (row) coord
+ */
 function tickSpark(i, x, y) {
   if (--grid.lifetimes[i] <= 0) { clearCell(i); return; }
   grid.temps[i] = 600;
@@ -1058,7 +1106,13 @@ function tickSpark(i, x, y) {
   }
 }
 
-// Handle detonation.
+/**
+ * Handle detonation.
+ * @param {number} i - flat grid index
+ * @param {number} x - x (column) coord
+ * @param {number} y - y (row) coord
+ * @param {number}temp - temperature
+ */
 function tickGunpowder(i, x, y, temp) {
   if (temp >= M_DETONATE_AT_TEMP[grid.elements[i]]) {
     // BOOM: convert to fire + spark, push neighbors
@@ -1087,13 +1141,21 @@ function tickGunpowder(i, x, y, temp) {
           }
         } else {
           grid.temps[j] += 200;
+          if (M_DETONATE_AT_TEMP[grid.elements[j]] > 0) {
+            grid.tickedThisFrame[j] = 1;
+          }
         }
       }
     }
   }
 }
 
-// Growing when near water.
+/**
+ * Growing when near water.
+ * @param {number} i - flat grid index
+ * @param {number} x - x (column) coord
+ * @param {number} y - y (row) coord
+ */
 function tickPlant(i, x, y) {
   // Grow toward adjacent empty cells if water nearby; slow rate
   if (!randChance(0.02)) return;
@@ -1130,7 +1192,13 @@ function tickPlant(i, x, y) {
   }
 }
 
-// Fuse gets lit when either hot enough OR adjacent to fire/spark/lit fuse, and handles burning out.
+/**
+ * Fuse gets lit when either hot enough OR adjacent to fire/spark/lit fuse, and handles burning out.
+ * @param {number} i - flat grid index
+ * @param {number} x - x (column) coord
+ * @param {number} y - y (row) coord
+ * @param {number}temp - temperature
+ */
 function tickFuse(i, x, y, temp) {
   // Fuse lights when hot OR adjacent to fire/spark/lit fuse
   const lit = grid.flags[i] === 1;
@@ -1194,7 +1262,12 @@ function tickFuse(i, x, y, temp) {
   }
 }
 
-// Acid EATS ALL (except glass etc).
+/**
+ * Acid EATS ALL (except glass etc)
+ * @param {number} i - flat grid index
+ * @param {number} x - x (column) coord
+ * @param {number} y - y (row) coord
+ */
 function tickAcid(i, x, y) {
   // Try to dissolve a random cardinal neighbor
   const dirs = [[0, 1], [0, -1], [-1, 0], [1, 0]];
@@ -1220,7 +1293,12 @@ function tickAcid(i, x, y) {
   }
 }
 
-// Melts ice on contact, slowly dissolves into water.
+/**
+ * Melts ice on contact, slowly dissolves into water.
+ * @param {number} i - flat grid index
+ * @param {number} x - x (column) coord
+ * @param {number} y - y (row) coord
+ */
 function tickSalt(i, x, y) {
   // Scan 8 neighbors, then either melt nearby ice or dissolve into water.
   for (let dy = -1; dy <= 1; dy++) {
@@ -1242,8 +1320,13 @@ function tickSalt(i, x, y) {
   }
 }
 
-// Spreads onto wet plants and oil; converts adjacent plants/oil to mold;
-// dies into a puff of dust/smoke when touched by fire or lava.
+/**
+ * Spreads onto wet plants and oil; converts adjacent plants/oil to mold;
+ * dies into a puff of dust/smoke when touched by fire or lava.
+ * @param {number} i - flat grid index
+ * @param {number} x - x (column) coord
+ * @param {number} y - y (row) coord
+ */
 function tickMold(i, x, y) {
   let dies = false;
   let waterNear = false;
@@ -1334,14 +1417,10 @@ function igniteNeighbors(x, y) {
 
 
 
-
-//endregion === Engine ===
-
-
-
-
-//#region Simulation
-
+// =====================================================================
+//           Cell Movement - Move logic and collision reactions
+// =====================================================================
+//region Movement
 
 // Currently NO collision reactions exist, but the system is wired. These are very specific - ONLY when a cell of one
 // element tries to move into the cell contained by a specific other element (impact-triggered, NOT mere adjacency.
@@ -1351,9 +1430,6 @@ function igniteNeighbors(x, y) {
 //   [E_DYNAMITE]: { [E_WALL]: dynamiteOnImpact },
 const COLLISION_REACTIONS = {
 };
-
-
-//#region Movement
 
 // Pure dispatch on MOVEMENT[e], the element's locomotion archetype (resolved at load — see the Movement
 // archetypes region). KIND no longer drives movement here; static/empty cells simply have no matching case.
@@ -1376,7 +1452,7 @@ function updateCellMovement(x, y) {
     case MOVE_GAS:    moveGas(i, x, y);       break;
     case MOVE_POWDER: movePowder(i, x, y);    break;
     case MOVE_LIQUID: moveLiquid(i, x, y, e); break;
-    // MOVE_STATIC (walls, wood, ice, empty cells) has no case, since they just chill
+          // MOVE_STATIC (walls, wood, ice, empty cells) has no case, since they just chill
   }
 }
 
@@ -1520,9 +1596,27 @@ function tryMoveOrSwap(i, nx, ny) {
   return false;
 }
 
-//#endregion
+//endregion Movement
 
-//#endregion
+//endregion === Engine ===
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 //#region Rendering
