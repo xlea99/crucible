@@ -310,7 +310,7 @@ const KIND_GAS     = 4;
 // How an element locomotes on its OWN turn, which is a separate axis from KIND. For most elements movement is
 // implied by KIND (a powder falls, a liquid flows, a gas rises), so they declare nothing and MOVEMENT is
 // derived from KIND at load time. Only genuinely exotic movers override it with an explicit movement
-// field (fire, for example). moveCells dispatches on MOVEMENT[e] as a jump table, so a
+// field (fire, for example). updateCellMovement dispatches on MOVEMENT[e] as a jump table, so a
 // new exotic mover costs one constant + one case and never taxes the common cells.
 // ** DEFAULTS **
 const MOVE_STATIC  = 0;   // no locomotion (walls, wood, ice, …); also the default for empty cells
@@ -1436,7 +1436,7 @@ const COLLISION_REACTIONS = {
  * reaction if present.
  * @param {number} i - flat grid index of the "here" cell
  * @param {number} nx - x (column) coord of the "there" cell
- * @param {number} ny - y (row) coord of the "there" cells
+ * @param {number} ny - y (row) coord of the "there" cell
  * @return {*|boolean} - success of the move/potential collision reaciton
  */
 function tryMove(i, nx, ny) {
@@ -1526,19 +1526,20 @@ function updateCellMovement(x, y) {
   // === Movement dispatch. Each handler is defined below in the same order as the cases.
   // (i, x, y) thread the cell's flat index + coords into every handler so they don't recompute them
   switch (M_MOVEMENT[e]) {
-    case MOVE_FLAME:  moveFlame(i, x, y);     break;
-    case MOVE_GAS:    moveGas(i, x, y);       break;
     case MOVE_POWDER: movePowder(i, x, y);    break;
     case MOVE_LIQUID: moveLiquid(i, x, y, e); break;
+    case MOVE_GAS:    moveGas(i, x, y);       break;
+
+    case MOVE_FLAME:  moveFlame(i, x, y);     break;
     // MOVE_STATIC (walls, wood, ice, empty cells) has no case, since they just chill
   }
 }
 
 
 // === Per-archetype movement handlers ===
-// One named function per movement archetype. moveCells dispatches into the right handler via a
+// One named function per movement archetype. updateCellMovement dispatches into the right handler via a
 // jump-table switch — each call site is monomorphic, so V8/SpiderMonkey can inline these back into the
-// hot loop. Order below matches the dispatch order in moveCells.
+// hot loop. Order below matches the dispatch order in updateCellMovement.
 
 
 /**
@@ -1573,7 +1574,7 @@ function moveLiquid(i, x, y, e) {
 }
 /**
  * Helper for moveLiquid that walks horizontally in `direction` until blocked, jumping to the furthest reachable
- * // empty cell. Also takes any downward opening along the way (gravity wins). Returns true if the cell moved.
+ * empty cell. Also takes any downward opening along the way (gravity wins). Returns true if the cell moved.
  * @param {number} i - flat grid index
  * @param {number} x - x (column) coord
  * @param {number} y - y (row) coord
@@ -1618,7 +1619,7 @@ function _probeSide(i, x, y, direction, spread) {
  * @param {number} y - y (row) coord
  */
 function moveGas(i, x, y) {
-  // 85% rise, 15% stall-or-sink — same turbulence as before
+  // 85% rise, 15% stall-or-sink
   const dy = randChance(0.85) ? -1 : (randChance(0.5) ? 0 : 1);
   const dx = randInt(3) - 1;                  // drift left / center / right
 
@@ -1673,7 +1674,7 @@ function moveFlame(i, x, y) {
 
 //#region Rendering
 
-// Setup canvas and image data
+// Set up canvas and image data
 const canvas = document.getElementById("sim");
 canvas.width = COLS;
 canvas.height = ROWS;
