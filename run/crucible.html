@@ -356,24 +356,24 @@ const E_EMBER      = 18;
 const E_SALT       = 19;
 const E_MOLD       = 20;
 // Always the next valid id
-const N_ELEMENTS = 21;
+const ELEMENT_COUNT = 21;
 //endregion === Element IDs ===
 
 //region === Metadata Keys/Parallel Arrays ===
 
 // Every valid parallel array for scoping into element metadata
-const NAME             = new Array(N_ELEMENTS);          // string
-const KIND             = new Uint8Array(N_ELEMENTS);     // KIND_* enum (matter-state: displacement + render hint)
-const MOVEMENT         = new Uint8Array(N_ELEMENTS);     // MOVE_* enum (locomotion archetype; defaults from KIND)
-const COLOR            = new Array(N_ELEMENTS);          // each entry is an [r, g, b] tuple
-const DEFAULT_TEMP     = new Int16Array(N_ELEMENTS);
-const DENSITY          = new Int8Array(N_ELEMENTS);
-const SPREAD           = new Int8Array(N_ELEMENTS);
-const LIFETIME         = new Int16Array(N_ELEMENTS);
-const IGNITION_CHANCE  = new Float32Array(N_ELEMENTS);
-const BURN_TEMP        = new Int16Array(N_ELEMENTS);
-const DETONATE_AT_TEMP = new Int16Array(N_ELEMENTS);
-const THERMAL_MASS     = new Uint8Array(N_ELEMENTS);
+const NAME             = new Array(ELEMENT_COUNT);          // string
+const KIND             = new Uint8Array(ELEMENT_COUNT);     // KIND_* enum (matter-state: displacement + render hint)
+const MOVEMENT         = new Uint8Array(ELEMENT_COUNT);     // MOVE_* enum (locomotion archetype; defaults from KIND)
+const COLOR            = new Array(ELEMENT_COUNT);          // each entry is an [r, g, b] tuple
+const DEFAULT_TEMP     = new Int16Array(ELEMENT_COUNT);
+const DENSITY          = new Int8Array(ELEMENT_COUNT);
+const SPREAD           = new Int8Array(ELEMENT_COUNT);
+const LIFETIME         = new Int16Array(ELEMENT_COUNT);
+const IGNITION_CHANCE  = new Float32Array(ELEMENT_COUNT);
+const BURN_TEMP        = new Int16Array(ELEMENT_COUNT);
+const DETONATE_AT_TEMP = new Int16Array(ELEMENT_COUNT);
+const THERMAL_MASS     = new Uint8Array(ELEMENT_COUNT);
 
 // List both allowed AND required keys (required subset of allowed obviously)
 const ELEMENT_KEYS = new Map([
@@ -398,7 +398,7 @@ const ELEMENT_KEYS = new Map([
 
 // One row per element. Position MUST MATCH element ID. To add a new element:
 //   1. Add an `E_FLOUNDER` constant above (next sequential integer)
-//   2. Bump N_ELEMENTS
+//   2. Bump ELEMENT_COUNT
 //   3. Add a row here in the matching position
 // The startup validation will catch mismatches.
 const ELEMENT_DEFS = [
@@ -424,9 +424,9 @@ const ELEMENT_DEFS = [
   { id: E_SALT,       name: 'Salt',       kind: KIND_POWDER, color: '#E6E6EB', defaultTemp:  20, density: 4 },
   { id: E_MOLD,       name: 'Mold',       kind: KIND_STATIC, color: '#6E8C50', defaultTemp:  20 },
 ];
-// Sanity check to catch a missed N_ELEMENTS bump or a duplicate/missing row
-if (ELEMENT_DEFS.length !== N_ELEMENTS) {
-  throw new Error(`ELEMENT_DEFS has ${ELEMENT_DEFS.length} entries but N_ELEMENTS is ${N_ELEMENTS}`);
+// Sanity check to catch a missed ELEMENT_COUNT bump or a duplicate/missing row
+if (ELEMENT_DEFS.length !== ELEMENT_COUNT) {
+  throw new Error(`ELEMENT_DEFS has ${ELEMENT_DEFS.length} entries but ELEMENT_COUNT is ${ELEMENT_COUNT}`);
 }
 // Also check for misaligned ELEMENT_DEFS element
 for (let i = 0; i < ELEMENT_DEFS.length; i++) {
@@ -443,7 +443,7 @@ for (let i = 0; i < ELEMENT_DEFS.length; i++) {
 // Using typed arrays where the value range permits, these get tighter machine code than generic JS arrays and
 // live in contiguous memory. Population loop walks ELEMENT_DEFS once at startup, validates each row, and explodes the
 // metadata into the parallel arrays above.
-for (let i = 0; i < N_ELEMENTS; i++) {
+for (let i = 0; i < ELEMENT_COUNT; i++) {
   const spec = ELEMENT_DEFS[i];
 
   // unknown-key check (unchanged)
