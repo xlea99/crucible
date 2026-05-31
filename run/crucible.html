@@ -287,12 +287,12 @@ function parseColor(value) {
 // =====================================================================
 //region === Element Registry ===
 
-// =====================================================================
+// *********************************************************************
 // MENTAL MODEL: an element is just an integer ID, nothing more. The constants E_X below ARE
 // the elements. There is no "instance" of an element, because the number 3 literally IS Water, water has no further
 // "rich object" representation. All metadata lives in parallel typed arrays indexed by that ID: to find water's
 // density, you just do DENSITY[E_WATER]
-// =====================================================================
+// *********************************************************************
 
 //region === Kinds ===
 // Small fixed taxonomy for an element's matter-state. Drives density-displacement in tryMoveOrSwap
@@ -640,7 +640,6 @@ function swapCells(i, j) {
 // =====================================================================
 //region === Engine ===
 
-
 let frame = 0;
 /**
  * Advances a single step (frame) and handle heat diffusion, ticking every cell for reactions, and movement.
@@ -690,9 +689,9 @@ function step() {
 
 
 
-// =====================================================================
+// *********************************************************************
 //           Cell Subsystems - Heat diffusion
-// =====================================================================
+// *********************************************************************
 //region Subsystems
 
 /**
@@ -758,9 +757,9 @@ function diffuseCellHeat(x,y) {
 
 
 
-// =====================================================================
+// *********************************************************************
 //           Cell Ticking and Reactions - tickCells, Contact Reactions, Reaction Helpers
-// =====================================================================
+// *********************************************************************
 //region Ticking and Reactions
 
 /**
@@ -1417,9 +1416,9 @@ function igniteNeighbors(x, y) {
 
 
 
-// =====================================================================
+// *********************************************************************
 //           Cell Movement - Move logic and collision reactions
-// =====================================================================
+// *********************************************************************
 //region Movement
 
 // Currently NO collision reactions exist, but the system is wired. These are very specific - ONLY when a cell of one
