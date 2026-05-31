@@ -885,9 +885,6 @@ function tickLava(i, x, y, temp) {
     grid.elements[waterI] = E_STEAM;
     grid.temps[waterI] = 150;
     grid.lifetimes[waterI] = 800 + randInt(400);
-
-    grid.movedThisFrame[i] = 1;
-    grid.movedThisFrame[waterI] = 1;
     grid.tickedThisFrame[waterI] = 1;
 
     // Crust nearby lava — quench radius 2 with falloff, so a sea pour makes a thick crust.
@@ -904,7 +901,6 @@ function tickLava(i, x, y, temp) {
             grid.elements[k] = E_STONE;
             grid.temps[k] = 360;
             grid.lifetimes[k] = 0;
-            grid.movedThisFrame[k] = 1;
             grid.tickedThisFrame[k] = 1;
           } else {
             grid.temps[k] -= 30;   // cool the rest a bit
@@ -925,7 +921,6 @@ function tickLava(i, x, y, temp) {
           grid.elements[k] = E_STEAM;
           grid.temps[k] = 140;
           grid.lifetimes[k] = 600 + randInt(400);
-          grid.movedThisFrame[k] = 1;
           grid.tickedThisFrame[k] = 1;
         }
       }
@@ -1050,7 +1045,6 @@ function tickSpark(i, x, y) {
       grid.elements[j] = E_SPARK;
       grid.lifetimes[j] = 6 + randInt(4);
       grid.temps[j] = 600;
-      grid.movedThisFrame[j] = 1;
       grid.tickedThisFrame[j] = 1;
 
       grid.elements[i] = E_WATER;
