@@ -776,9 +776,9 @@ function tickCell(x, y) {
   // No matter what reaction happened (or didn't), we consider the attempt ticked regardless.
   grid.tickedThisFrame[i] = 1;
 
-  const thisElement = grid.elements[i];
+  const e = grid.elements[i];
   // Nothing to tick if this cell is empty.
-  if (thisElement === E_EMPTY) return;
+  if (e === E_EMPTY) return;
 
   // Get any needed attributes of this cell.
   const temp = grid.temps[i];
@@ -786,7 +786,7 @@ function tickCell(x, y) {
   //=== Generic data-driven properties get handled first ===
 
   // Ignition/flammability
-  if (M_IGNITION_CHANCE[thisElement] > 0 && temp >= M_BURN_TEMP[thisElement] && randChance(M_IGNITION_CHANCE[thisElement])) {
+  if (M_IGNITION_CHANCE[e] > 0 && temp >= M_BURN_TEMP[e] && randChance(M_IGNITION_CHANCE[e])) {
     grid.elements[i] = E_FIRE;
     grid.lifetimes[i] = M_LIFETIME[E_FIRE] + randInt(60)
     grid.temps[i] = 500;
@@ -796,7 +796,7 @@ function tickCell(x, y) {
   // === Element-specific dispatch. Each handler is defined below in the same order as the cases.
   // `temp` is threaded into handlers that read it, so they don't redo grid.temps[i]. The typed-array
   // read is cheap but happens per active cell per frame, and on a screen-of-water that adds up.
-  switch (thisElement) {
+  switch (e) {
     case E_WATER:     tickWater(i, temp);     break;
     case E_STEAM:     tickSteam(i, temp);     break;
     case E_ICE:       tickIce(i, temp);       break;
@@ -1430,66 +1430,171 @@ function igniteNeighbors(x, y) {
 const COLLISION_REACTIONS = {
 };
 
-// Pure dispatch on MOVEMENT[e], the element's locomotion archetype (resolved at load — see the Movement
-// archetypes region). KIND no longer drives movement here; static/empty cells simply have no matching case.
+
 /**
- *
- * @param {number} x -
- * @param {number} y
+ * Tries to move i to target (nx, ny). If that cell is occupied, it does not try to swap but does run a collision
+ * reaction if present.
+ * @param {number} i - flat grid index of the "here" cell
+ * @param {number} nx - x (column) coord of the "there" cell
+ * @param {number} ny - y (row) coord of the "there" cells
+ * @return {*|boolean} - success of the move/potential collision reaciton
+ */
+function tryMove(i, nx, ny) {
+  if (!cellInBounds(nx, ny)) return false;
+  const j = cellIndex(nx, ny);
+  if (grid.movedThisFrame[j]) return false;
+
+  if (grid.elements[j] === E_EMPTY) { moveCell(i, j); return true; }
+
+  const reaction = COLLISION_REACTIONS[grid.elements[i]]?.[grid.elements[j]];
+  if (reaction) {
+    if (typeof reaction === "function") return reaction(i, j);
+    const [resHere, resThere, prob] = reaction;
+    if (Math.random() < prob) {
+      grid.elements[i] = resHere;  grid.elements[j] = resThere;
+      grid.movedThisFrame[i] = 1;  grid.movedThisFrame[j] = 1;
+      return true;
+    }
+  }
+  return false;
+}
+/**
+ * Tries to make the cell i(x, y) fall down own into empty, otherwise sink straight through a lighter fluid; diagonals
+ * are EMPTY-only
+ * @param {number} i - flat grid index
+ * @param {number} x - x (column) coord
+ * @param {number} y - y (row) coord
+ * @return {boolean} - result of the attempt
+ */
+function tryFall(i, x, y) {
+  if (tryMove(i, x, y + 1) || trySinkInto(i, x, y+1)) return true;
+  const d = randChance(0.5) ? -1 : 1;
+  if (tryMove(i, x + d, y + 1)) return true;
+  // noinspection RedundantIfStatementJS
+  if (tryMove(i, x - d, y + 1)) return true;
+  return false;
+}
+/**
+ * Tries to make the cell i(?, y) sink down through a lighter element.
+ * @param {number} i - flat grid index of the "here" cell
+ * @param {number} nx - x (column) coord of the "there" cell
+ * @param {number} ny - y (row) coord of the "there" cells
+ * @return {boolean} - result of the attempt
+ */
+function trySinkInto(i, nx, ny) {
+  if (!cellInBounds(nx, ny)) return false;
+  const j = cellIndex(nx, ny);
+  if (grid.movedThisFrame[j]) return false;
+  const there = grid.elements[j];
+  if ((M_MOVEMENT[there] === MOVE_LIQUID || M_MOVEMENT[there] === MOVE_GAS) &&
+          M_DENSITY[grid.elements[i]] > M_DENSITY[there]) {
+    swapCells(i, j);
+    return true;
+  }
+  return false;
+}
+/**
+ * Tries to make a cell rist straight up through a heavier element (mirror of trySink)
+ * @param {number} i - flat grid index
+ * @param {number} y - y (row) coord
+ * @return {boolean} - result of the attempt
+ */
+function tryRise(i, y) {
+  if (y <= 0) return false;
+  const j = i - COLS;
+  if (grid.movedThisFrame[j]) return false;
+  const above = grid.elements[j];
+  if ((M_MOVEMENT[above] === MOVE_LIQUID || M_MOVEMENT[above] === MOVE_GAS) &&
+       M_DENSITY[above] > M_DENSITY[grid.elements[i]]) {
+    swapCells(i, j);
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Main movement controller, determines movement of any cell by dispatching on the element's MOVEMENT[e]
+ * @param {number} x - x (column) coord
+ * @param {number} y - y (row) coord
  */
 function updateCellMovement(x, y) {
   const i = cellIndex(x, y);
+  // If this cell has already been marked as having moved, we already done
   if (grid.movedThisFrame[i]) return;
   const e = grid.elements[i];
 
   // === Movement dispatch. Each handler is defined below in the same order as the cases.
-  // (i, x, y) thread the cell's flat index + coords into every handler so they don't recompute them.
-  // `e` is threaded into moveLiquid so it doesn't redo grid.elements[i] for the SPREAD lookup —
-  // direct analogue of the `temp` passthrough in tickCells.
+  // (i, x, y) thread the cell's flat index + coords into every handler so they don't recompute them
   switch (M_MOVEMENT[e]) {
     case MOVE_FLAME:  moveFlame(i, x, y);     break;
     case MOVE_GAS:    moveGas(i, x, y);       break;
     case MOVE_POWDER: movePowder(i, x, y);    break;
     case MOVE_LIQUID: moveLiquid(i, x, y, e); break;
-          // MOVE_STATIC (walls, wood, ice, empty cells) has no case, since they just chill
+    // MOVE_STATIC (walls, wood, ice, empty cells) has no case, since they just chill
   }
 }
+
 
 // === Per-archetype movement handlers ===
 // One named function per movement archetype. moveCells dispatches into the right handler via a
 // jump-table switch — each call site is monomorphic, so V8/SpiderMonkey can inline these back into the
 // hot loop. Order below matches the dispatch order in moveCells.
 
-// FLAME — fire & spark: rise and flicker, never sink. (heat/ignition handled per-tick in tickCells)
-function moveFlame(i, x, y) {
-  const dy = randChance(0.7) ? -1 : 0;
-  const dx = randInt(3) - 1;
-  tryMoveOrSwap(i, x + dx, y + dy);
-}
 
-// GAS — smoke & steam: rise hard, occasionally stall or sink, drifting sideways.
-function moveGas(i, x, y) {
-  const dy = randChance(0.85) ? -1 : (randChance(0.5) ? 0 : 1);
-  const dx = randInt(3) - 1;
-  tryMoveOrSwap(i, x + dx, y + dy);
-}
-
-// POWDER — fall straight down, then down-diagonal; piles up.
+/**
+ * POWDER: Simply fall straight down, then down-diagonal; piles up.
+ * @param {number} i - flat grid index
+ * @param {number} x - x (column) coord
+ * @param {number} y - y (row) coord
+ */
 function movePowder(i, x, y) {
-  tryFall(i, x, y);
+  if (tryMove(i, x, y + 1) || trySinkInto(i, x, y + 1)) return;   // straight down
+  const d = randChance(0.5) ? -1 : 1;
+  if (tryMove(i, x + d, y + 1) || trySinkInto(i, x + d, y + 1)) return;   // diagonals sink too
+  tryMove(i, x - d, y + 1) || trySinkInto(i, x - d, y + 1);
 }
 
-// Sub-helper for moveLiquid: walks horizontally in `dir` until blocked, jumping to the furthest reachable
-// empty cell. Also takes any downward opening along the way (gravity wins). Returns true if the cell moved.
-// Earned its extraction by the iff-reuse rule — 2 call sites in moveLiquid (positive dir, then negative dir).
-function probeSide(i, x, y, dir, spread) {
+/**
+ * LIQUID: fall first, then flow sideways by jumping to the furthest reachable empty cell so water
+ * actually flows fast instead of crawling one cell per frame.
+ * @param {number} i - flat grid index
+ * @param {number} x - x (column) coord
+ * @param {number} y - y (row) coord
+ * @param {number} e - element
+ */
+function moveLiquid(i, x, y, e) {
+  if (tryFall(i, x, y)) return;                  // sink / fall
+  const spread = M_SPREAD[e];
+  const d = randChance(0.5) ? -1 : 1;
+
+  // Flow to furthest reachable EMPTY
+  if (_probeSide(i, x, y,  d, spread)) return;
+  _probeSide(i, x, y, -d, spread);
+}
+/**
+ * Helper for moveLiquid that walks horizontally in `direction` until blocked, jumping to the furthest reachable
+ * // empty cell. Also takes any downward opening along the way (gravity wins). Returns true if the cell moved.
+ * @param {number} i - flat grid index
+ * @param {number} x - x (column) coord
+ * @param {number} y - y (row) coord
+ * @param {number} direction - -1 (left) or 1 (right)
+ * @param {number} spread - how far the liquid tries to spread
+ * @return {boolean} - whether the move was successful
+ * @private
+ */
+function _probeSide(i, x, y, direction, spread) {
   let bestX = x;
   for (let s = 1; s <= spread; s++) {
-    const nx = x + dir * s;
+    const nx = x + (direction * s);
+    // If we've hit boundary, search has failed
     if (!cellInBounds(nx, y)) break;
+
     const j = cellIndex(nx, y);
+    // If we've hit a filled cell OR a cell that has been marked moved this frame, search has failed
     if (grid.elements[j] !== E_EMPTY || grid.movedThisFrame[j]) break;
+
     bestX = nx;
+    // If we find an empty cell BELOW our potential bestX, water falls there immediately (gravity etc)
     if (y < ROWS - 1) {
       const below = j + COLS;
       if (grid.elements[below] === E_EMPTY && !grid.movedThisFrame[below]) {
@@ -1498,101 +1603,49 @@ function probeSide(i, x, y, dir, spread) {
       }
     }
   }
-  if (bestX !== x) { moveCell(i, cellIndex(bestX, y)); return true; }
-  return false;
-}
-
-// LIQUID — fall first, then flow sideways by jumping to the furthest reachable empty cell so water
-// actually flows fast instead of crawling one cell per frame.
-function moveLiquid(i, x, y, e) {
-  if (tryFall(i, x, y)) return;
-  const spread = M_SPREAD[e] ?? 3;
-  const dir = randChance(0.5) ? -1 : 1;
-  if (probeSide(i, x, y,  dir, spread)) return;
-  if (probeSide(i, x, y, -dir, spread)) return;
-  // single-cell swap fallback (e.g. oil floating on water)
-  tryMoveOrSwap(i, x + dir, y) || tryMoveOrSwap(i, x - dir, y);
-}
-
-/**
- * Tries to move a cell's contents (i) down or down-diag
- * @param {number} i - flat grid index of the current cell
- * @param {number} x - x (column) coord of the current cell
- * @param {number} y - y (row) coord of the current cell
- * @return {boolean} - if the fall/swap was successful
- */
-function tryFall(i, x, y) {
-  // First try to move straight down
-  if (tryMoveOrSwap(i, x, y + 1)) return true;
-
-  // Then try down-diag if that wasn't successful, with random L/R first
-  const d = randChance(0.5) ? -1 : 1;
-  if (tryMoveOrSwap(i, x + d, y + 1)) return true;
-  // noinspection RedundantIfStatementJS
-  if (tryMoveOrSwap(i, x - d, y + 1)) return true;
-  return false;
-}
-
-/**
- * Tries to move or swap one cell (i) to another cell (nx, ny), also handling potential
- * collision reactions.
- * @param {number} i - flat grid index of the "here" cell
- * @param {number} nx - x (column) coord of the "there" cell
- * @param {number} ny - y (row) coord of the "there" cells
- * @return {boolean} - if any type of move was successful
- */
-function tryMoveOrSwap(i, nx, ny) {
-  if (!cellInBounds(nx, ny)) return false;
-
-  const j = cellIndex(nx,ny);
-  // Skip already moved elements
-  if (grid.movedThisFrame[j]) return false;
-
-  const here = grid.elements[i], there = grid.elements[j];
-
-  // If `here` is trying to moving into an EMPTY there, it just succeeds automatically.
-  if (there === E_EMPTY) {
-    moveCell(i, j);
+  // If a valid bestX was found, take it. Otherwise the move has failed
+  if (bestX !== x) {
+    moveCell(i, cellIndex(bestX, y));
     return true;
   }
-
-  // Handle any collision reactions
-  const reaction = COLLISION_REACTIONS[here]?.[there];
-  if (reaction) {
-    // Run the collision reaction function if present
-    if (typeof reaction === "function") {
-      return reaction(i, j);
-    }
-    // Otherwise resolve its result automatically
-    const [resultHere, resultThere, prob] = reaction;
-    if (Math.random() < prob) {
-      grid.elements[i] = resultHere;
-      grid.elements[j] = resultThere;
-
-      grid.movedThisFrame[i] = 1;
-      grid.movedThisFrame[j] = 1;
-      return true;
-    }
-  }
-
-  // Finally, try to swap by density. Note the two branches compare density in OPPOSITE directions —
-  // this is deliberate, not duplication:
-  //   - A powder/liquid is the HEAVY one sinking DOWN into a lighter fluid: swap if DENSITY[here] > DENSITY[there].
-  //   - A gas is the LIGHT one rising UP into a heavier fluid: swap if DENSITY[there] > DENSITY[here].
-  // The gas branch can't be folded into the first: gases move upward, so a gas must initiate its own rise.
-  // Without it, gas-vs-gas density stratification silently breaks (a heavy gas would never sink below a light one).
-  const kindHere = M_KIND[here], kindThere = M_KIND[there];
-  if (kindHere === KIND_POWDER || kindHere === KIND_LIQUID) {
-    if ((kindThere === KIND_LIQUID || kindThere === KIND_GAS) && M_DENSITY[here] > M_DENSITY[there]) {
-      swapCells(i, j); return true;
-    }
-  }
-  if (kindHere === KIND_GAS) {
-    if ((kindThere === KIND_LIQUID || kindThere === KIND_GAS) && M_DENSITY[there] > M_DENSITY[here]) {
-      swapCells(i, j); return true;
-    }
-  }
   return false;
+}
+
+/**
+ * GAS: rise hard, occasionally stall or sink, drifting sideways.
+ * @param {number} i - flat grid index
+ * @param {number} x - x (column) coord
+ * @param {number} y - y (row) coord
+ */
+function moveGas(i, x, y) {
+  // 85% rise, 15% stall-or-sink — same turbulence as before
+  const dy = randChance(0.85) ? -1 : (randChance(0.5) ? 0 : 1);
+  const dx = randInt(3) - 1;                  // drift left / center / right
+
+  // Drift into an empty cell first (any direction, including the stall/sink rolls)
+  if (tryMove(i, x + dx, y + dy)) return;
+
+  // Blocked while trying to rise → bubble straight up through a heavier fluid.
+  // Up-only: this is precisely what stops gas from diving *under* liquid.
+  if (dy < 0) tryRise(i, y);
+}
+
+// ========================
+
+/**
+ * FLAME: rise and flicker, never sink. (heat/ignition handled per-tick in tickCells)
+ * @param {number} i - flat grid index
+ * @param {number} x - x (column) coord
+ * @param {number} y - y (row) coord
+ */
+function moveFlame(i, x, y) {
+  // 70% rise, 30% stall
+  const dy = randChance(0.7) ? -1 : 0;
+  const dx = randInt(3) - 1;                  // drift left / center / right
+
+  // Flame only ever moves into empty air — it never density-swaps.
+  // Water/lava interactions are adjacency reactions in tickCells, not movement.
+  tryMove(i, x + dx, y + dy);
 }
 
 //endregion Movement
