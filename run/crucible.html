@@ -2447,6 +2447,110 @@ function renderBrushPreview() {
 
 
 // =====================================================================
+//           Scenes - Preset scenes
+// =====================================================================
+//#region === Scenes ===
+
+// TODO scenes are VERY todo, very low prio to overhaul before there's a full working game first.
+// the sizing compromise below works, but since we now have a stable size it's best to just rewrite scenes against
+// actual COLS/ROWS. Scenes themselves all need overhaul.
+
+// Presets are designed against a 200×140 reference grid and scale to whatever
+// the actual COLS/ROWS are. SX/SY map reference coords to grid coords.
+const _RX = 200, _RY = 140;
+const SX = (x) => (x * COLS / _RX) | 0;
+const SY = (y) => (y * ROWS / _RY) | 0;
+
+
+function _rect(x0, y0, x1, y1, element) {
+  const t = M_DEFAULT_TEMP[element];
+  for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) {
+    if (cellInBounds(x, y)) setCell(cellIndex(x, y), element, t);
+  }
+}
+function R(x0, y0, x1, y1, element) {
+  _rect(SX(x0), SY(y0), SX(x1), SY(y1), element);
+}
+function S(x, y, element) {
+  const sx = SX(x), sy = SY(y);
+  if (cellInBounds(sx, sy)) setCell(cellIndex(sx, sy), element, M_DEFAULT_TEMP[element]);
+}
+
+
+// noinspection JSUnusedGlobalSymbols
+const SCENES = {
+  volcano() {
+    clearAll();
+    R(0, 130, _RX, _RY, E_STONE);
+    // cone: narrow at top (y=60) widening downward (y=130)
+    const cx = SX(100);
+    const yTop = SY(60), yBottom = SY(130);
+    const wScale = (COLS / _RX);
+    for (let y = yTop; y < yBottom; y++) {
+      const refDy = (y - yTop) / (yBottom - yTop) * 70;  // 0..70 in reference
+      const outerHalf = ((8 + refDy * 0.7) * wScale) | 0;
+      const innerHalf = Math.max(0, outerHalf - (6 * wScale) | 0);
+      for (let x = cx - outerHalf; x <= cx + outerHalf; x++) {
+        const dist = Math.abs(x - cx);
+        if (dist > innerHalf && cellInBounds(x, y)) setCell(cellIndex(x, y), E_STONE, M_DEFAULT_TEMP[E_STONE]);
+      }
+    }
+    // lava chamber inside the cone (lower portion only)
+    const yLavaTop = SY(95);
+    for (let y = yLavaTop; y < yBottom; y++) {
+      const refDy = (y - yTop) / (yBottom - yTop) * 70;
+      const outerHalf = ((8 + refDy * 0.7) * wScale) | 0;
+      const innerHalf = Math.max(0, outerHalf - (6 * wScale) | 0);
+      for (let x = cx - innerHalf; x < cx + innerHalf; x++) {
+        if (cellInBounds(x, y)) setCell(cellIndex(x, y), E_LAVA, M_DEFAULT_TEMP[E_LAVA]);
+      }
+    }
+    R(155, 30, 195, 60, E_WATER);
+    R(150, 60, 200, 64, E_WALL);
+    R(135, 64, 150, 67, E_WOOD);
+  },
+  aquarium() {
+    clearAll();
+    R(20, 30, 180, 35, E_GLASS);
+    R(20, 30, 25, 130, E_GLASS);
+    R(175, 30, 180, 130, E_GLASS);
+    R(20, 125, 180, 130, E_GLASS);
+    R(25, 110, 175, 125, E_SAND);
+    R(25, 50, 175, 110, E_WATER);
+    for (let rx = 40; rx < 160; rx += 14) S(rx, 109, E_PLANT);
+  },
+  demolition() {
+    clearAll();
+    R(0, 130, _RX, _RY, E_WALL);
+    R(20, 110, 35, 128, E_GUNPOWDER);
+    R(80, 110, 95, 128, E_GUNPOWDER);
+    R(150, 110, 165, 128, E_GUNPOWDER);
+    R(180, 90,  195, 128, E_GUNPOWDER);
+    for (let rx = 36; rx < 80; rx++)  S(rx, 109, E_FUSE);
+    for (let rx = 96; rx < 150; rx++) S(rx, 109, E_FUSE);
+    for (let rx = 166; rx < 180; rx++) S(rx, 109, E_FUSE);
+    for (let ry = 100; ry < 109; ry++) S(35, ry, E_FUSE);
+    R(60, 90, 130, 100, E_WOOD);
+  },
+  winter() {
+    clearAll();
+    R(0, 90, _RX, 100, E_ICE);
+    R(0, 100, _RX, 130, E_WATER);
+    R(0, 125, _RX, _RY, E_SAND);
+    for (let rx = 10; rx < _RX; rx += 22) {
+      R(rx, 80, rx + 8, 90, E_ICE);
+    }
+    R(160, 120, 175, 124, E_WOOD);
+    S(167, 119, E_FIRE);
+    S(168, 119, E_FIRE);
+  }
+};
+
+//#endregion === Scenes ===
+
+
+
+// =====================================================================
 //           UI - Input Event Listeners, Painting
 // =====================================================================
 //#region === UI ===
@@ -2583,110 +2687,17 @@ document.getElementById("pause").addEventListener("click", () => { paused = !pau
 document.getElementById("clear").addEventListener("click", clearAll);
 document.getElementById("showHeat").addEventListener("click", () => heatView = !heatView);
 
-
+// Add scene buttons
+document.querySelectorAll("[data-scene]").forEach(b => {
+  b.addEventListener("click", () => SCENES[b.dataset.scene]());
+});
 
 //endregion Misc
 
 //#endregion === UI ===
 
 
-//#region Scenes
-// ---- preset scenes ---------------------------------------------------
-// Presets are designed against a 200×140 reference grid and scale to whatever
-// the actual COLS/ROWS are. SX/SY map reference coords to grid coords.
-const _RX = 200, _RY = 140;
-const SX = (x) => (x * COLS / _RX) | 0;
-const SY = (y) => (y * ROWS / _RY) | 0;
-// Scene helpers default temperature to the element's M_DEFAULT_TEMP. This is an authoring-
-// convenience boundary, not a silent assumption — scene setup unambiguously spawns fresh
-// elements at room/element-default temp. Pass an explicit temp if you want otherwise.
-function rect(x0, y0, x1, y1, element) {
-  const t = M_DEFAULT_TEMP[element];
-  for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) {
-    if (cellInBounds(x, y)) setCell(cellIndex(x, y), element, t);
-  }
-}
-function R(x0, y0, x1, y1, element) {
-  rect(SX(x0), SY(y0), SX(x1), SY(y1), element);
-}
-function S(x, y, element) {
-  const sx = SX(x), sy = SY(y);
-  if (cellInBounds(sx, sy)) setCell(cellIndex(sx, sy), element, M_DEFAULT_TEMP[element]);
-}
 
-
-// noinspection JSUnusedGlobalSymbols
-const SCENES = {
-  volcano() {
-    clearAll();
-    R(0, 130, _RX, _RY, E_STONE);
-    // cone: narrow at top (y=60) widening downward (y=130)
-    const cx = SX(100);
-    const yTop = SY(60), yBot = SY(130);
-    const wScale = (COLS / _RX);
-    for (let y = yTop; y < yBot; y++) {
-      const refDy = (y - yTop) / (yBot - yTop) * 70;  // 0..70 in reference
-      const outerHalf = ((8 + refDy * 0.7) * wScale) | 0;
-      const innerHalf = Math.max(0, outerHalf - (6 * wScale) | 0);
-      for (let x = cx - outerHalf; x <= cx + outerHalf; x++) {
-        const dist = Math.abs(x - cx);
-        if (dist > innerHalf && cellInBounds(x, y)) setCell(cellIndex(x, y), E_STONE, M_DEFAULT_TEMP[E_STONE]);
-      }
-    }
-    // lava chamber inside the cone (lower portion only)
-    const yLavaTop = SY(95);
-    for (let y = yLavaTop; y < yBot; y++) {
-      const refDy = (y - yTop) / (yBot - yTop) * 70;
-      const outerHalf = ((8 + refDy * 0.7) * wScale) | 0;
-      const innerHalf = Math.max(0, outerHalf - (6 * wScale) | 0);
-      for (let x = cx - innerHalf; x < cx + innerHalf; x++) {
-        if (cellInBounds(x, y)) setCell(cellIndex(x, y), E_LAVA, M_DEFAULT_TEMP[E_LAVA]);
-      }
-    }
-    R(155, 30, 195, 60, E_WATER);
-    R(150, 60, 200, 64, E_WALL);
-    R(135, 64, 150, 67, E_WOOD);
-  },
-  aquarium() {
-    clearAll();
-    R(20, 30, 180, 35, E_GLASS);
-    R(20, 30, 25, 130, E_GLASS);
-    R(175, 30, 180, 130, E_GLASS);
-    R(20, 125, 180, 130, E_GLASS);
-    R(25, 110, 175, 125, E_SAND);
-    R(25, 50, 175, 110, E_WATER);
-    for (let rx = 40; rx < 160; rx += 14) S(rx, 109, E_PLANT);
-  },
-  demolition() {
-    clearAll();
-    R(0, 130, _RX, _RY, E_WALL);
-    R(20, 110, 35, 128, E_GUNPOWDER);
-    R(80, 110, 95, 128, E_GUNPOWDER);
-    R(150, 110, 165, 128, E_GUNPOWDER);
-    R(180, 90,  195, 128, E_GUNPOWDER);
-    for (let rx = 36; rx < 80; rx++)  S(rx, 109, E_FUSE);
-    for (let rx = 96; rx < 150; rx++) S(rx, 109, E_FUSE);
-    for (let rx = 166; rx < 180; rx++) S(rx, 109, E_FUSE);
-    for (let ry = 100; ry < 109; ry++) S(35, ry, E_FUSE);
-    R(60, 90, 130, 100, E_WOOD);
-  },
-  winter() {
-    clearAll();
-    R(0, 90, _RX, 100, E_ICE);
-    R(0, 100, _RX, 130, E_WATER);
-    R(0, 125, _RX, _RY, E_SAND);
-    for (let rx = 10; rx < _RX; rx += 22) {
-      R(rx, 80, rx + 8, 90, E_ICE);
-    }
-    R(160, 120, 175, 124, E_WOOD);
-    S(167, 119, E_FIRE);
-    S(168, 119, E_FIRE);
-  }
-};
-document.querySelectorAll("[data-scene]").forEach(b => {
-  b.addEventListener("click", () => SCENES[b.dataset.scene]());
-});
-//#endregion
 
 
 //#region Main Loop
