@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+<!--suppress JSBitwiseOperatorUsage -->
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
@@ -331,6 +332,14 @@ const DEFAULT_MOVEMENT_FOR_KIND = [
 ];
 //endregion === Movement archetypes ===
 
+//region === PostFX bits ===
+
+// PostFX bitmask. Each element declares which post-processing effects it uses via `fx:` in ELEMENT_DEFS. Multiple bits
+// can be OR'd together for elements that use more than one effect
+const FX_GLOW = 1 << 0;   // additive 3x3 light dab around the cell (fire, lava, spark, ember, lit fuse)
+
+//endregion === PostFX bits ===
+
 //region === Element Definitions ===
 
 // Top-level `const` to try to bribe V8 and SpiderMonkey into folding them to
@@ -401,15 +410,15 @@ const ELEMENT_DEFS = [
 
   {
     id: E_FIRE, name: 'Fire', kind: KIND_GAS, movement: MOVE_FLAME, lifetime: 60,
-    shader: shadeFire, previewColor: '#E76F0A',
+    shader: shadeFire, previewColor: '#E76F0A', fx: FX_GLOW,
     defaultTemp: 540,
   },
 
   {
     id: E_LAVA, name: 'Lava', kind: KIND_LIQUID,
-    baseColoration: '#E6461E', shader: shadeLava,
+    baseColoration: '#E6461E', shader: shadeLava, fx: FX_GLOW,
     density: 6, spread: 1,
-    defaultTemp: 700,
+    defaultTemp: 700
   },
 
   {
@@ -476,21 +485,21 @@ const ELEMENT_DEFS = [
 
   {
     id: E_SPARK, name: 'Spark', kind: KIND_GAS, movement: MOVE_FLAME, lifetime: 8,
-    shader: shadeSpark, previewColor: '#FFDC64',
-    defaultTemp: 600,
+    shader: shadeSpark, previewColor: '#FFDC64', fx: FX_GLOW,
+    defaultTemp: 600
   },
 
   {
     id: E_FUSE, name: 'Fuse', kind: KIND_STATIC,
-    baseColoration: '#B48C50', shader: shadeFuse,
+    baseColoration: '#B48C50', shader: shadeFuse, fx: FX_GLOW,
     surfaceFriction: 50,
     defaultTemp: 20,
   },
 
   {
     id: E_EMBER, name: 'Ember', kind: KIND_GAS, lifetime: 24,
-    shader: shadeEmber,
-    defaultTemp: 400,
+    shader: shadeEmber, fx: FX_GLOW,
+    defaultTemp: 400
   },
 
   {
@@ -525,16 +534,18 @@ const M_IGNITION_CHANCE  = new Float32Array(ELEMENT_COUNT);
 const M_BURN_TEMP        = new Int16Array(ELEMENT_COUNT);
 const M_DETONATE_AT_TEMP = new Int16Array(ELEMENT_COUNT);
 const M_THERMAL_MASS     = new Uint8Array(ELEMENT_COUNT);
-const M_SURFACE_FRICTION = new Uint16Array(ELEMENT_COUNT);    // how much static-friction this element provides to powder cells resting ON TOP of it (0 = slippery, 10 = high-grip). See movePowder.
+const M_SURFACE_FRICTION = new Uint16Array(ELEMENT_COUNT);
 
-// === Coloration metadata ===
-// Each element declares its appearance with two OPTIONAL refs: a baseColoration (a producer of one (r,g,b) tuple,
+// === Rendering metadata ===
+// Each element declares its appearance with two-three OPTIONAL refs: a baseColoration (a producer of one (r,g,b) tuple,
 // consumed exactly once at spawn) and a shader (a per-frame function that may modify or overwrite the base).
-// Both/either is valid, neither is not (validation kicks that shit to the curb)
+// Both/either is valid, neither is not (validation kicks that shit to the curb). On top of these, an element can
+// also declare that it uses one/multiple PostFX effects.
 const M_HAS_BASE         = new Uint8Array(ELEMENT_COUNT);     // 1 if element has baseColoration, 0 if shader-only (used for hot-loop branch)
 const M_BASE_COLORATION  = new Array(ELEMENT_COUNT);          // normalized generator function () => [r,g,b], or null if absent
 const M_SHADER           = new Array(ELEMENT_COUNT);          // per-frame shader function (i, p, data) => void, or null if absent
 const M_PREVIEW_COLOR    = new Array(ELEMENT_COUNT);          // [r,g,b] for UI purposes
+const M_FX               = new Uint8Array(ELEMENT_COUNT);     // bitmask of FX_* this element uses in (0 = no PostFX involvement)
 
 /**
  * Normalizes any of the four BaseColoration spec forms into a single generator function shape.
@@ -563,23 +574,23 @@ function normalizeBaseColoration(form) {
 
 // List both allowed AND required keys (required subset of allowed obviously)
 const META_KEYS = new Map([
-  ['id', {required: true}],
-  ['name', {required: true, store: M_NAME }],
-  ['kind', {required: true, store: M_KIND }],
-  ['defaultTemp', {required: true, store: M_DEFAULT_TEMP}],
-  ['movement', {required: false, store: M_MOVEMENT, default: s => DEFAULT_MOVEMENT_FOR_KIND[s.kind] }],
-  ['density', {required: false, store: M_DENSITY, default: 0}],
-  ['spread', {required: false, store: M_SPREAD, default: 0}],
-  ['lifetime', {required: false, store: M_LIFETIME, default: 0}],
-  ['ignitionChance', {required: false, store: M_IGNITION_CHANCE, default: 0}],
-  ['burnTemp', {required: false, store: M_BURN_TEMP, default: 0}],
-  ['detonateAtTemp', {required: false, store: M_DETONATE_AT_TEMP, default: 0}],
-  ['thermalMass', {required: false, store: M_THERMAL_MASS, default: 4}],
-  ['surfaceFriction', {required: false, store: M_SURFACE_FRICTION, default: 0}],
-  // Coloration:
-  ['baseColoration', {required: false, store: M_BASE_COLORATION, default: null, transform: normalizeBaseColoration}],
-  ['shader',         {required: false, store: M_SHADER,          default: null}],
-  ['previewColor',   {required: false, default: null}],   // consumed in the post-bake step below, no parallel-array store
+  ['id',              {required: true}],
+  ['name',            {required: true,  store: M_NAME }],
+  ['kind',            {required: true,  store: M_KIND }],
+  ['defaultTemp',     {required: true,  store: M_DEFAULT_TEMP}],
+  ['movement',        {required: false, store: M_MOVEMENT,          default: s => DEFAULT_MOVEMENT_FOR_KIND[s.kind] }],
+  ['density',         {required: false, store: M_DENSITY,           default: 0}],
+  ['spread',          {required: false, store: M_SPREAD,            default: 0}],
+  ['lifetime',        {required: false, store: M_LIFETIME,          default: 0}],
+  ['ignitionChance',  {required: false, store: M_IGNITION_CHANCE,   default: 0}],
+  ['burnTemp',        {required: false, store: M_BURN_TEMP,         default: 0}],
+  ['detonateAtTemp',  {required: false, store: M_DETONATE_AT_TEMP,  default: 0}],
+  ['thermalMass',     {required: false, store: M_THERMAL_MASS,      default: 4}],
+  ['surfaceFriction', {required: false, store: M_SURFACE_FRICTION,  default: 0}],
+  ['baseColoration',  {required: false, store: M_BASE_COLORATION,   default: null, transform: normalizeBaseColoration}],
+  ['shader',          {required: false, store: M_SHADER,            default: null}],
+  ['previewColor',    {required: false,                             default: null}],   // consumed in the post-bake step below, no parallel-array store
+  ['fx',              {required: false, store: M_FX,                default: 0}],
 ]);
 
 //endregion === Keys/Parallel Arrays ===
@@ -1952,7 +1963,7 @@ function moveFlame(i, x, y) {
 // =====================================================================
 //#region === Rendering ===
 
-// First set up canvas and image data
+// Set up canvas and image data
 const canvas = document.getElementById("sim");
 canvas.width = COLS;
 canvas.height = ROWS;
@@ -1969,47 +1980,72 @@ for (let p = 3; p < pix.length; p += 4) pix[p] = 255;
 let heatView = false;
 let settleView = false;
 
+// PostFX active-cell list. Flat array of grid indices that participate in any PostFX this frame, rebuilt from scratch
+// during renderMainView's main scan (the per-cell `if (M_FX[e]) fxList[fxCount++] = i;` is essentially free, riding
+// the cache line we already have to touch). Then renderPostFXPass iterates fxList[0..fxCount] instead of scanning all
+// 132k cells, dispatching per FX bit. No CRUD hooks needed since M_FX is per-element ground truth and the list is
+// rebuilt every frame.
+const fxList = new Uint32Array(GRID_SIZE);
+let fxCount = 0;
+
 /**
- * Top-level render handler. ach pass owns its own composite mode, its own iteration shape, and its own
- * per-element dispatch. A sequence of passes, in order:
+ * Top-level render handler. Each pass owns its own iteration shape, its own per-element
+ * dispatch, and its own write surface. A sequence of passes, in order:
  *
  *   1. ONE pixel pass writes raw RGB into the `pix` ImageData buffer (either the normal
- *      color view or the heat-vis debug view, never both).
- *   2. putImageData flushes that buffer to the canvas.
- *   3. ZERO OR MORE overlay passes draw on TOP of the flushed pixels using Canvas 2D ops
- *      (additive glow, brush preview, future fog/shimmer/bloom/etc).
+ *      color view or one of the debug views, never both). Main mode also populates fxList
+ *      as a side effect of its scan.
+ *   2. ZERO OR ONE PostFX pass reads fxList and writes additive contributions directly
+ *      into `pix` (additive math via Uint8ClampedArray auto-clamping, no Canvas 2D ops).
+ *      Skipped in debug views, which are flat by design.
+ *   3. putImageData flushes the final `pix` buffer to the canvas in one go.
+ *   4. ZERO OR MORE Canvas 2D overlay passes draw on TOP of the flushed pixels (currently
+ *      just the brush preview circle, prolly not many more to come)
+ *
+ * Note that steps 1+2 both work on `pix` BEFORE the flush in step 3, while step 4
+ * happens AFTER the flush using ctx draw ops directly. This split exists because PostFX
+ * wants pixel-precise additive math (cheaper as direct buffer writes) and the brush
+ * preview wants vector-style stroke rendering (easier with Canvas ops).
  */
 function render() {
-  // Pixel pass: fills `pix` with one RGB per cell (exactly one mode wins per frame)
+  // Pixel pass: fills `pix` with one RGB per cell (exactly one mode wins per frame).
+  // Main mode also rebuilds fxList; debug modes leave fxCount untouched (no PostFX runs).
   if      (heatView)   renderHeatView();
   else if (settleView) renderSettleView();
   else                 renderMainView();
+
+  // PostFX pass: reads fxList, writes additive RGB into `pix`. Gated to main view only
+  if (!heatView && !settleView) renderPostFXPass();
+
+  // Flush the final pixel buffer to the canvas.
   ctx.putImageData(imgData, 0, 0);
 
-  // Overlay passes — drawn on top of the flushed pixel buffer. Glow only fires in the
-  // normal color view (debug views are flat, adding glow would obscure the signal).
-  if (!heatView && !settleView) renderGlowPass();
+  // Canvas overlay passes - drawn on top of the flushed pixels using Canvas 2D ops.
   if (mouse.in) renderBrushPreview();
 }
 
 
 
 // *********************************************************************
-//           Rendering - Map Modes (MainPixelPass, HeatView, SettleView etc)
+//           Rendering - View Modes (MainPixelPass, HeatView, SettleView etc)
 // *********************************************************************
-//region Map Modes
+//region View Modes
 
 
 /**
- * Pixel pass: MAIN (color) mode. Two-step per cell, stored base then per-frame shader.
+ * Pixel pass: MAIN (color) mode. Three-step per cell - stored base, per-frame shader, then PostFX bookkeeping.
  *    1. If element has baseColoration, write grid.color[R/G/B][i] into pix[p..p+2]. BaseColoration is consistent
  *    from the moment they're generated, they persist inside the cell.
  *    2. If element has a shader, dispatch. Shader either MODIFIES the just-written base, or OVERWRITES it
  *    from scratch (shader's call; no contract enforces either). Shader coloration is run every frame because it
  *    depends on live state of the grid.
+ *    3. If element participates in any PostFX (M_FX[e] != 0), push its index onto fxList. This piggybacks on
+ *    the scan we have to do anyway, so the cost is one branch + one write per cell - effectively free. The list
+ *    is consumed by renderPostFXPass after this function returns.
  */
 function renderMainView() {
   const data = pix;
+  fxCount = 0;   // reset PostFX list at the start of every frame's scan
   for (let i = 0, p = 0; i < GRID_SIZE; i++, p += 4) {
     const e = grid.elements[i];
 
@@ -2033,6 +2069,13 @@ function renderMainView() {
       case E_FUSE:     shadeFuse(i, p, data);   break;
       case E_EMBER:    shadeEmber(p, data);     break;
       case E_MOLD:     shadeMold(i, p, data);   break;
+    }
+
+    // Step 3: PostFX bookkeeping. If this element participates in any post-processing
+    // effect, record its index now while we already have it cached. renderPostFXPass
+    // will iterate this list (much smaller than GRID_SIZE in the common case).
+    if (M_FX[e]) {
+      fxList[fxCount++] = i;
     }
   }
 }
@@ -2085,7 +2128,7 @@ function renderHeatView() {
   }
 }
 
-//endregion Map Modes
+//endregion View Modes
 
 
 
@@ -2294,86 +2337,82 @@ function shadeMold(i, p, data) {
 // *********************************************************************
 //region PostFX
 
-
-//region Glow Effects
-
 /**
- * Overlay pass: additive glow for hot/lit cells. Paints a 3x3 translucent dab centered
- * on each fire / lava / spark / ember / burning-fuse cell using composite mode "lighter"
- * so neighbors brighten warmly and overlapping glows stack. This is what makes fire look
- * alive instead of like a row of orange dots.
- *
- * NOTE: currently scans every cell in the grid (the main perf bottleneck of this
- * section). To be replaced with active-cell tracking later. Pure reorg for now.
+ * PostFX pass: iterates the fxList populated by renderMainView and dispatches each cell to every PostFX handler whose
+ * bit is set in M_FX[element]. Writes additive RGB contributions directly into the `pix` ImageData buffer before
+ * putImageData flushes to canvas.
  */
-function renderGlowPass() {
-  ctx.globalCompositeOperation = "lighter";
-  for (let y = 0; y < ROWS; y++) {
-    for (let x = 0; x < COLS; x++) {
-      const i = cellIndex(x, y);
-
-      switch (grid.elements[i]) {
-        case E_FIRE:    glowFire(x, y);      break;
-        case E_LAVA:    glowLava(x, y);      break;
-        case E_SPARK:   glowSpark(x, y);     break;
-        case E_EMBER:   glowEmber(x, y);     break;
-        case E_FUSE:    glowFuse(i, x, y);   break;
-      }
-    }
+function renderPostFXPass() {
+  // Inline for belt and suspenders guarantee that its pinned as a local variable ref. dont trust that mf v8
+  // noinspection UnnecessaryLocalVariableJS
+  const data = pix;
+  for (let k = 0; k < fxCount; k++) {
+    const i  = fxList[k];
+    const fx = M_FX[grid.elements[i]];
+    const x  = i % COLS;
+    const y  = (i / COLS) | 0;
+    if (fx & FX_GLOW) applyGlow(i, x, y, data);
+    // future FX bits dispatched here
   }
-  ctx.globalCompositeOperation = "source-over";
 }
 
+//region Glow Effect
+
 /**
- * Glow pass for FIRE
- * @param {number} x - x (column) coord
- * @param {number} y - y (row) coord
- */
-function glowFire(x, y) {
-  ctx.fillStyle = `rgba(255,140,40,0.35)`;
-  ctx.fillRect(x - 1, y - 1, 3, 3);
-}
-/**
- * Glow pass for LAVA
- * @param {number} x - x (column) coord
- * @param {number} y - y (row) coord
- */
-function glowLava(x, y) {
-  ctx.fillStyle = `rgba(255,80,20,0.18)`;
-  ctx.fillRect(x - 1, y - 1, 3, 3);
-}
-/**
- * Glow pass for SPARK
- * @param {number} x - x (column) coord
- * @param {number} y - y (row) coord
- */
-function glowSpark(x, y) {
-  ctx.fillStyle = `rgba(255,240,140,0.6)`;
-  ctx.fillRect(x - 1, y - 1, 3, 3);
-}
-/**
- * Glow pass for EMBER
- * @param {number} x - x (column) coord
- * @param {number} y - y (row) coord
- */
-function glowEmber(x, y) {
-  ctx.fillStyle = `rgba(255,160,40,0.45)`;
-  ctx.fillRect(x - 1, y - 1, 3, 3);
-}
-/**
- * Glow pass for FUSE
+ * Per-element glow contribution dispatcher. Selects the additive (r, g, b) values
+ * appropriate to this element, then hands off to addGlowDab to do the 3x3 paint.
+ *
+ * FUSE is a special case, since only lit fuses glow (grid.flags[i] === 1). Unlit fuses
+ * still ride fxList (because M_FX[E_FUSE] == FX_GLOW unconditionally), so we early-out
+ * here. Barely matters
  * @param {number} i - flat grid index
  * @param {number} x - x (column) coord
  * @param {number} y - y (row) coord
+ * @param {Uint8ClampedArray} data - pixel buffer (pix) being written into
  */
-function glowFuse(i, x, y) {
-  // No glow needed if the fuse isn't lit
-  if (grid.flags[i] !== 1) return;
-  ctx.fillStyle = `rgba(255,140,40,0.4)`;
-  ctx.fillRect(x - 1, y - 1, 3, 3);
+function applyGlow(i, x, y, data) {
+  switch (grid.elements[i]) {
+    case E_FIRE:  addGlowDab(x, y, data,  89,  49, 14); break;
+    case E_LAVA:  addGlowDab(x, y, data,  46,  14,  4); break;
+    case E_SPARK: addGlowDab(x, y, data, 153, 144, 84); break;
+    case E_EMBER: addGlowDab(x, y, data, 115,  72, 18); break;
+    case E_FUSE:
+      if (grid.flags[i] === 1) addGlowDab(x, y, data, 102, 56, 16);
+      break;
+  }
 }
 
-//endregion Glow Effects
+/**
+ * Helper paints a 3x3 additive RGB dab into the pixel buffer, centered on (x, y) and clamped
+ * to the grid bounds.
+ * @param {number} x - center x (column) coord
+ * @param {number} y - center y (row) coord
+ * @param {Uint8ClampedArray} data - pixel buffer (pix) being written into
+ * @param {number} r - additive red contribution per pixel in the 3x3 dab
+ * @param {number} g - additive green contribution per pixel in the 3x3 dab
+ * @param {number} b - additive blue contribution per pixel in the 3x3 dab
+ */
+function addGlowDab(x, y, data, r, g, b) {
+  // Cheap ternaries to do bounds clamping, once per call. Should be no big deal
+  const x0 = x > 0          ? x - 1 : 0;
+  const x1 = x < COLS - 1   ? x + 1 : COLS - 1;
+  const y0 = y > 0          ? y - 1 : 0;
+  const y1 = y < ROWS - 1   ? y + 1 : ROWS - 1;
+  const xCount = x1 - x0 + 1;
+  const rowStride = COLS * 4;
+  let rowStart = (y0 * COLS + x0) * 4;
+  for (let yy = y0; yy <= y1; yy++) {
+    let p = rowStart;
+    for (let xx = 0; xx < xCount; xx++, p += 4) {
+      data[p]   += r;
+      data[p+1] += g;
+      data[p+2] += b;
+    }
+    rowStart += rowStride;
+  }
+}
+
+//endregion Glow Effect
 
 //region Misc
 
