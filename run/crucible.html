@@ -1947,25 +1947,10 @@ function moveFlame(i, x, y) {
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 // =====================================================================
 //           Rendering - Drawing the canvas, baseColoration, Shaders, PostFX
 // =====================================================================
-//#region Rendering
+//#region === Rendering ===
 
 // First set up canvas and image data
 const canvas = document.getElementById("sim");
@@ -2012,7 +1997,7 @@ function render() {
 // *********************************************************************
 //           Rendering - Map Modes (MainPixelPass, HeatView, SettleView etc)
 // *********************************************************************
-//region === Map Modes ===
+//region Map Modes
 
 
 /**
@@ -2100,14 +2085,14 @@ function renderHeatView() {
   }
 }
 
-//endregion === Map Modes ===
+//endregion Map Modes
 
 
 
 // *********************************************************************
 //           Rendering - BaseColoration Generators
 // *********************************************************************
-//region === BaseColoration ===
+//region BaseColoration
 
 /**
  * Shared helper for elements that use a base color + per-grain pseudo-random tint. Produces a "speckled grain" look
@@ -2150,7 +2135,7 @@ function baseSalt() {
   return makeGrainyVariation(230, 230, 235);
 }
 
-//endregion === BaseColoration ===
+//endregion BaseColoration
 
 
 
@@ -2158,7 +2143,7 @@ function baseSalt() {
 // *********************************************************************
 //           Rendering - Shaders
 // *********************************************************************
-//region === Shaders ===
+//region Shaders
 
 /**
  * Shader for EMPTY: adds subtle warm/cool tint based on cell temperature so heat radiating through air is visible.
@@ -2300,14 +2285,14 @@ function shadeMold(i, p, data) {
   data[p+2] = 70 + (k >> 2);
 }
 
-//endregion === Shaders ===
+//endregion Shaders
 
 
 
 // *********************************************************************
 //           Rendering - PostFX
 // *********************************************************************
-//region === PostFX ===
+//region PostFX
 
 
 //region Glow Effects
@@ -2408,10 +2393,10 @@ function renderBrushPreview() {
 //endregion Misc
 
 
-//endregion === PostFX ===
+//endregion PostFX
 
 
-//endregion Rendering
+//endregion === Rendering ===
 
 
 
