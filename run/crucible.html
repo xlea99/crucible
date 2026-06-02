@@ -1959,7 +1959,7 @@ function moveFlame(i, x, y) {
 
 
 // =====================================================================
-//           Rendering - Drawing the canvas, baseColoration, Shaders, PostFX
+//           Rendering - View Modes, BaseColoration, Shaders, PostFX
 // =====================================================================
 //#region === Rendering ===
 
@@ -2439,70 +2439,58 @@ function renderBrushPreview() {
 
 
 
+// =====================================================================
+//           Input - View Modes, BaseColoration, Shaders, PostFX
+// =====================================================================
+//#region === Input ===
 
-//#region Input
-
-const mouse = { x:0, y:0, gx:0, gy:0, in:false, btn:0 };
+// Input state
+const mouse = { x: 0, y: 0, gx: 0, gy: 0, in: false, btn: 0 };
 let brushSize = 6;
-let currentEl = E_SAND;          // the currently-selected paint element ID
+let selectedElement = E_SAND;          // the currently-selected paint element ID
 let heatPen = 20;
 
 /**
- * Paints a brush stroke (circular splat of radius `brushSize`) of the given element at the
- * given temperature. Temperature is REQUIRED — callers must state intent explicitly.
- * @param {number} gx - grid x of brush center
- * @param {number} gy - grid y of brush center
- * @param {number} eid - element ID to paint
- * @param {number} temp - temperature to spawn each cell at
+ * Accounts for the position of the mouse on the canvas and converts to its grid coordinates.
+ * @param {MouseEvent} event - mouse event to update on
  */
-function paintAt(gx, gy, eid, temp) {
-  const kind = M_KIND[eid];
-  const sparser = (kind === KIND_GAS || kind === KIND_POWDER) && eid !== E_EMPTY;
-  const r = brushSize;
-  for (let dy = -r; dy <= r; dy++) {
-    for (let dx = -r; dx <= r; dx++) {
-      if (dx*dx + dy*dy > r*r) continue;
-      const x = gx + dx, y = gy + dy;
-      if (!cellInBounds(x, y)) continue;
-      // gases/powders sparser fill so they don't oversaturate
-      if (sparser && Math.random() > 0.55) continue;
-      setCell(cellIndex(x, y), eid, temp);
-    }
-  }
-}
-
-canvas.addEventListener("contextmenu", ev => ev.preventDefault());
-canvas.addEventListener("mousedown", ev => {
-  mouse.btn = ev.button === 2 ? 2 : 1;
-  updateMouse(ev);
-  doPaint();
-});
-window.addEventListener("mouseup", () => { mouse.btn = 0; });
-canvas.addEventListener("mousemove", ev => {
-  updateMouse(ev);
-  if (mouse.btn) doPaint();
-});
-canvas.addEventListener("mouseenter", () => mouse.in = true);
-canvas.addEventListener("mouseleave", () => mouse.in = false);
-
-function updateMouse(ev) {
-  const r = canvas.getBoundingClientRect();
-  mouse.x = ev.clientX - r.left;
-  mouse.y = ev.clientY - r.top;
+function updateMouse(event) {
+  const rect = canvas.getBoundingClientRect();
+  mouse.x = event.clientX - rect.left;
+  mouse.y = event.clientY - rect.top;
   mouse.gx = (mouse.x / PX_PER_CELL) | 0;
   mouse.gy = (mouse.y / PX_PER_CELL) | 0;
 }
 
+// DOM Event Wiring
+canvas.addEventListener("contextmenu", event => event.preventDefault());
+canvas.addEventListener("mousedown", event => {
+  mouse.btn = event.button === 2 ? 2 : 1;
+  updateMouse(event);
+});
+window.addEventListener("mouseup", () => { mouse.btn = 0; });
+canvas.addEventListener("mousemove", event => { updateMouse(event); });
+canvas.addEventListener("mouseenter", () => mouse.in = true);
+canvas.addEventListener("mouseleave", () => mouse.in = false);
+
+/**
+ * Paints a brush stroke (circular splat of radius `brushSize`) of the given element at the given temperature
+ * onto the canvas, OR E_EMPTY (clearing elements) if right clicked.
+ */
 function doPaint() {
-  if (mouse.btn === 2) {
-    paintAt(mouse.gx, mouse.gy, E_EMPTY, M_DEFAULT_TEMP[E_EMPTY]);
-  } else {
-    paintAt(mouse.gx, mouse.gy, currentEl, M_DEFAULT_TEMP[currentEl]);
+  const e = mouse.btn === 2 ? E_EMPTY : selectedElement;
+  const r = brushSize;
+  for (let dy = -r; dy <= r; dy++) {
+    for (let dx = -r; dx <= r; dx++) {
+      if (dx*dx + dy*dy > r*r) continue;
+      const x = mouse.gx + dx, y = mouse.gy + dy;
+      if (!cellInBounds(x, y)) continue;
+      setCell(cellIndex(x, y), e, M_DEFAULT_TEMP[e]);
+    }
   }
-  // apply heat pen for non-element heat injection if WALL is held with shift (skip)
 }
 
-//#endregion
+//#endregion === Input ===
 
 
 //#region UI Wiring
@@ -2530,9 +2518,9 @@ PALETTE_ORDER.forEach((eid, idxOrder) => {
   buttons[eid] = b;
 });
 
-function selectElement(eid) {
-  currentEl = eid;
-  for (const k in buttons) buttons[k].classList.toggle("active", +k === currentEl);
+function selectElement(e) {
+  selectedElement = e;
+  for (const k in buttons) buttons[k].classList.toggle("active", +k === selectedElement);
 }
 selectElement(E_SAND);
 
@@ -2702,6 +2690,7 @@ function loop() {
     statsEl.textContent = `cells: ${COLS}×${ROWS}=${GRID_SIZE}\nactive: ${act}\nfps: ${lastFps}`;
   }
   requestAnimationFrame(loop);
+  if (mouse.btn) doPaint();
 }
 
 // seed a little pile so it's not empty on load (scales with grid size)
