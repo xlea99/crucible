@@ -363,27 +363,149 @@ const E_MOLD       = 20;
 //   3. Add a row here in the matching position
 // The startup validation will catch mismatches.
 const ELEMENT_DEFS = [
-  { id: E_EMPTY,      name: 'Eraser',     kind: KIND_EMPTY,  color: '#080610', defaultTemp:  20 },
-  { id: E_WALL,       name: 'Wall',       kind: KIND_STATIC, color: '#78768C', defaultTemp:  20, thermalMass: 10, surfaceFriction: 50 },
-  { id: E_SAND,       name: 'Sand',       kind: KIND_POWDER, color: '#E0C171', defaultTemp:  20, density: 4, surfaceFriction: 8 },
-  { id: E_WATER,      name: 'Water',      kind: KIND_LIQUID, color: '#447CDE', defaultTemp:  20, density: 2, spread: 6 },
-  { id: E_WOOD,       name: 'Wood',       kind: KIND_STATIC, color: '#6E4628', defaultTemp:  20, ignitionChance: 0.012, burnTemp: 220, surfaceFriction: 150 },
-  { id: E_FIRE,       name: 'Fire',       kind: KIND_GAS,    color: '#FF8C28', defaultTemp: 540, movement: MOVE_FLAME, lifetime: 60 },
-  { id: E_LAVA,       name: 'Lava',       kind: KIND_LIQUID, color: '#E6461E', defaultTemp: 700, density: 6, spread: 1 },
-  { id: E_STEAM,      name: 'Steam',      kind: KIND_GAS,    color: '#B4C8DC', defaultTemp: 130, lifetime: 600 },
-  { id: E_ICE,        name: 'Ice',        kind: KIND_STATIC, color: '#AAD2EB', defaultTemp: -10, thermalMass: 24, surfaceFriction: 0 },
-  { id: E_STONE,      name: 'Stone',      kind: KIND_POWDER, color: '#645A5A', defaultTemp:  30, density: 5,  thermalMass:  8, surfaceFriction: 850 },
-  { id: E_GLASS,      name: 'Glass',      kind: KIND_STATIC, color: '#A0D2DC', defaultTemp:  40, thermalMass: 10, surfaceFriction: 20 },
-  { id: E_PLANT,      name: 'Plant',      kind: KIND_STATIC, color: '#50C864', defaultTemp:  20, ignitionChance: 0.02, burnTemp: 180, surfaceFriction: 300 },
-  { id: E_ACID,       name: 'Acid',       kind: KIND_LIQUID, color: '#B4FF50', defaultTemp:  20, density: 2, spread: 3 },
-  { id: E_GUNPOWDER,  name: 'Gunpowder',  kind: KIND_POWDER, color: '#3C3C3C', defaultTemp:  20, density: 4, detonateAtTemp: 200, surfaceFriction: 20 },
-  { id: E_SMOKE,      name: 'Smoke',      kind: KIND_GAS,    color: '#3C3C48', defaultTemp:  80, lifetime: 200 },
-  { id: E_OIL,        name: 'Oil',        kind: KIND_LIQUID, color: '#502850', defaultTemp:  20, density: 1, spread: 4, ignitionChance: 0.05, burnTemp: 130 },
-  { id: E_SPARK,      name: 'Spark',      kind: KIND_GAS,    color: '#FFFFA0', defaultTemp: 600, movement: MOVE_FLAME, lifetime: 8 },
-  { id: E_FUSE,       name: 'Fuse',       kind: KIND_STATIC, color: '#B48C50', defaultTemp:  20, surfaceFriction: 50 },
-  { id: E_EMBER,      name: 'Ember',      kind: KIND_GAS,    color: '#FFAA3C', defaultTemp: 400, lifetime: 24 },
-  { id: E_SALT,       name: 'Salt',       kind: KIND_POWDER, color: '#E6E6EB', defaultTemp:  20, density: 4, surfaceFriction: 200 },
-  { id: E_MOLD,       name: 'Mold',       kind: KIND_STATIC, color: '#6E8C50', defaultTemp:  20, surfaceFriction: 100 },
+  // baseColoration: '#hex' (flat) | function (per-spawn generator) | array of hex (random pick) | absent (shader paints)
+  // shader: per-frame function ref (declared in Render's Coloring subsection — must be `function` declarations for hoisting)
+  {
+    id: E_EMPTY, name: 'Eraser', kind: KIND_EMPTY,
+    baseColoration: '#080610', shader: shadeEmpty,
+    defaultTemp: 20,
+  },
+
+  {
+    id: E_WALL, name: 'Wall', kind: KIND_STATIC,
+    baseColoration: '#78768C',
+    surfaceFriction: 50,
+    defaultTemp: 20, thermalMass: 10,
+  },
+
+  {
+    id: E_SAND, name: 'Sand', kind: KIND_POWDER,
+    baseColoration: baseSand,
+    density: 4, surfaceFriction: 8,
+    defaultTemp: 20,
+  },
+
+  {
+    id: E_WATER, name: 'Water', kind: KIND_LIQUID,
+    baseColoration: '#447CDE', shader: shadeWater,
+    density: 2, spread: 6,
+    defaultTemp: 20,
+  },
+
+  {
+    id: E_WOOD, name: 'Wood', kind: KIND_STATIC,
+    baseColoration: '#6E4628',
+    surfaceFriction: 150,
+    defaultTemp: 20, ignitionChance: 0.012, burnTemp: 220,
+  },
+
+  {
+    id: E_FIRE, name: 'Fire', kind: KIND_GAS, movement: MOVE_FLAME, lifetime: 60,
+    shader: shadeFire, previewColor: '#E76F0A',
+    defaultTemp: 540,
+  },
+
+  {
+    id: E_LAVA, name: 'Lava', kind: KIND_LIQUID,
+    baseColoration: '#E6461E', shader: shadeLava,
+    density: 6, spread: 1,
+    defaultTemp: 700,
+  },
+
+  {
+    id: E_STEAM, name: 'Steam', kind: KIND_GAS, lifetime: 600,
+    baseColoration: '#B4C8DC', shader: shadeFading,
+    defaultTemp: 130,
+  },
+
+  {
+    id: E_ICE, name: 'Ice', kind: KIND_STATIC,
+    baseColoration: '#AAD2EB',
+    surfaceFriction: 0,
+    defaultTemp: -10, thermalMass: 24,
+  },
+
+  {
+    id: E_STONE, name: 'Stone', kind: KIND_POWDER,
+    baseColoration: baseStone,
+    density: 5, surfaceFriction: 850,
+    defaultTemp: 30, thermalMass: 8,
+  },
+
+  {
+    id: E_GLASS, name: 'Glass', kind: KIND_STATIC,
+    baseColoration: '#A0D2DC',
+    surfaceFriction: 20,
+    defaultTemp: 40, thermalMass: 10,
+  },
+
+  {
+    id: E_PLANT, name: 'Plant', kind: KIND_STATIC,
+    baseColoration: '#50C864', shader: shadePlant,
+    surfaceFriction: 300,
+    defaultTemp: 20, ignitionChance: 0.02, burnTemp: 180,
+  },
+
+  {
+    id: E_ACID, name: 'Acid', kind: KIND_LIQUID,
+    baseColoration: '#B4FF50',
+    density: 2, spread: 3,
+    defaultTemp: 20,
+  },
+
+  {
+    id: E_GUNPOWDER, name: 'Gunpowder', kind: KIND_POWDER,
+    baseColoration: baseGunpowder,
+    density: 4, surfaceFriction: 20,
+    defaultTemp: 20,
+    detonateAtTemp: 200,
+  },
+
+  {
+    id: E_SMOKE, name: 'Smoke', kind: KIND_GAS, lifetime: 200,
+    baseColoration: '#3C3C48', shader: shadeFading,
+    defaultTemp: 80,
+  },
+
+  {
+    id: E_OIL, name: 'Oil', kind: KIND_LIQUID,
+    baseColoration: '#502850',
+    density: 1, spread: 4,
+    defaultTemp: 20, ignitionChance: 0.05, burnTemp: 130,
+  },
+
+  {
+    id: E_SPARK, name: 'Spark', kind: KIND_GAS, movement: MOVE_FLAME, lifetime: 8,
+    shader: shadeSpark, previewColor: '#FFDC64',
+    defaultTemp: 600,
+  },
+
+  {
+    id: E_FUSE, name: 'Fuse', kind: KIND_STATIC,
+    baseColoration: '#B48C50', shader: shadeFuse,
+    surfaceFriction: 50,
+    defaultTemp: 20,
+  },
+
+  {
+    id: E_EMBER, name: 'Ember', kind: KIND_GAS, lifetime: 24,
+    shader: shadeEmber,
+    defaultTemp: 400,
+  },
+
+  {
+    id: E_SALT, name: 'Salt', kind: KIND_POWDER,
+    baseColoration: baseSalt,
+    density: 4, surfaceFriction: 200,
+    defaultTemp: 20,
+  },
+
+  {
+    id: E_MOLD, name: 'Mold', kind: KIND_STATIC,
+    shader: shadeMold, previewColor: '#5A8246',
+    surfaceFriction: 100,
+    defaultTemp: 20,
+  },
 ];
 const ELEMENT_COUNT = ELEMENT_DEFS.length;
 
@@ -395,7 +517,6 @@ const ELEMENT_COUNT = ELEMENT_DEFS.length;
 const M_NAME             = new Array(ELEMENT_COUNT);          // string
 const M_KIND             = new Uint8Array(ELEMENT_COUNT);     // KIND_* enum (matter-state: displacement + render hint)
 const M_MOVEMENT         = new Uint8Array(ELEMENT_COUNT);     // MOVE_* enum (locomotion archetype; defaults from KIND)
-const M_COLOR            = new Array(ELEMENT_COUNT);          // each entry is an [r, g, b] tuple
 const M_DEFAULT_TEMP     = new Int16Array(ELEMENT_COUNT);
 const M_DENSITY          = new Int8Array(ELEMENT_COUNT);
 const M_SPREAD           = new Int8Array(ELEMENT_COUNT);
@@ -406,12 +527,45 @@ const M_DETONATE_AT_TEMP = new Int16Array(ELEMENT_COUNT);
 const M_THERMAL_MASS     = new Uint8Array(ELEMENT_COUNT);
 const M_SURFACE_FRICTION = new Uint16Array(ELEMENT_COUNT);    // how much static-friction this element provides to powder cells resting ON TOP of it (0 = slippery, 10 = high-grip). See movePowder.
 
+// === Coloration metadata ===
+// Each element declares its appearance with two OPTIONAL refs: a baseColoration (a producer of one (r,g,b) tuple,
+// consumed exactly once at spawn) and a shader (a per-frame function that may modify or overwrite the base).
+// Both/either is valid, neither is not (validation kicks that shit to the curb)
+const M_HAS_BASE         = new Uint8Array(ELEMENT_COUNT);     // 1 if element has baseColoration, 0 if shader-only (used for hot-loop branch)
+const M_BASE_COLORATION  = new Array(ELEMENT_COUNT);          // normalized generator function () => [r,g,b], or null if absent
+const M_SHADER           = new Array(ELEMENT_COUNT);          // per-frame shader function (i, p, data) => void, or null if absent
+const M_PREVIEW_COLOR    = new Array(ELEMENT_COUNT);          // [r,g,b] for UI purposes
+
+/**
+ * Normalizes any of the four BaseColoration spec forms into a single generator function shape.
+ * Called by the baker per element. Generator runs at SPAWN ONLY (consumed once into grid.color),
+ * never per-frame. The four accepted forms:
+ *   1. Flat hex string: '#B48C50' -> generator returns the same tuple every call
+ *   2. Array of hex strings: ['#B48C50','#1E65C4','#6EC44D'] -> each spawn picks one uniformly at random
+ *   3. Function: () => [r,g,b] -> arbitrary spawn logic (per-cell variation, whatever)
+ *   4. Absent (undefined/null) -> returns null, element will be shader-only (and will look like E_EMPTY
+ * @param {string|string[]|Function|null|undefined} form - any of the four BaseColoration spec forms
+ * @returns {Function|null} generator () => [r,g,b], or null if absent
+ */
+function normalizeBaseColoration(form) {
+  if (form === undefined || form === null) return null;
+  if (typeof form === 'function') return form;
+  if (typeof form === 'string') {
+    const rgb = parseColor(form);
+    return () => rgb;
+  }
+  if (Array.isArray(form)) {
+    const palette = form.map(parseColor);
+    return () => palette[(Math.random() * palette.length) | 0];
+  }
+  throw new Error(`Invalid baseColoration form: ${form}`);
+}
+
 // List both allowed AND required keys (required subset of allowed obviously)
 const META_KEYS = new Map([
   ['id', {required: true}],
   ['name', {required: true, store: M_NAME }],
   ['kind', {required: true, store: M_KIND }],
-  ['color', {required: true, store: M_COLOR, transform: parseColor }],
   ['defaultTemp', {required: true, store: M_DEFAULT_TEMP}],
   ['movement', {required: false, store: M_MOVEMENT, default: s => DEFAULT_MOVEMENT_FOR_KIND[s.kind] }],
   ['density', {required: false, store: M_DENSITY, default: 0}],
@@ -422,6 +576,10 @@ const META_KEYS = new Map([
   ['detonateAtTemp', {required: false, store: M_DETONATE_AT_TEMP, default: 0}],
   ['thermalMass', {required: false, store: M_THERMAL_MASS, default: 4}],
   ['surfaceFriction', {required: false, store: M_SURFACE_FRICTION, default: 0}],
+  // Coloration:
+  ['baseColoration', {required: false, store: M_BASE_COLORATION, default: null, transform: normalizeBaseColoration}],
+  ['shader',         {required: false, store: M_SHADER,          default: null}],
+  ['previewColor',   {required: false, default: null}],   // consumed in the post-bake step below, no parallel-array store
 ]);
 
 //endregion === Keys/Parallel Arrays ===
@@ -468,6 +626,30 @@ for (let i = 0; i < ELEMENT_COUNT; i++) {
   }
 }
 
+// Coloration post-bake. Derives the M_HAS_BASE flag + M_PREVIEW_COLOR tuple from the already-normalized M_BASE_COLORATION
+// generators. Runs once. Also enforces the "every element must have baseColoration OR shader" rule both is fine, one
+// is fine, neither is straight to Hague.
+for (let i = 0; i < ELEMENT_COUNT; i++) {
+  const spec = ELEMENT_DEFS[i];
+  const generator = M_BASE_COLORATION[i];
+  M_HAS_BASE[i] = generator ? 1 : 0;
+
+  if (!generator && !M_SHADER[i]) {
+    throw new Error(`Element '${spec.name}' has neither baseColoration nor shader! Must declare at least one!!`);
+  }
+
+  // Preview color for UI swatches. Priority: explicit previewColor -> run generator once -> gray fallback
+  if (spec.previewColor !== undefined && spec.previewColor !== null) {
+    M_PREVIEW_COLOR[i] = parseColor(spec.previewColor);
+  }
+  else if (generator) {
+    M_PREVIEW_COLOR[i] = generator();
+  }
+  else {
+    M_PREVIEW_COLOR[i] = [128, 128, 128]; // lame ass gray
+  }
+}
+
 // Final sanity check for misaligned ELEMENT_DEFS element
 for (let i = 0; i < ELEMENT_DEFS.length; i++) {
   if (ELEMENT_DEFS[i].id !== i) {
@@ -498,8 +680,14 @@ const grid = {
   lifetimes : new Int16Array(GRID_SIZE),
   // Flags in each cell, used differently for different purposes by various elements
   flags: new Uint8Array(GRID_SIZE),
-  // Per-cell remembered visual noise seed (0..31). Set at spawn, travels with the cell on move/swap
-  colorNoise : new Uint8Array(GRID_SIZE),
+  // Per-cell stored RGB base color. Written ONCE at spawn by applyBaseColoration (consuming
+  // the element's M_BASE_COLORATION generator), then read every frame by the renderer.
+  // Travels with the cell on move/swap. Three separate Uint8Arrays for clean indexing — no
+  // packing math at read time. Shader-only elements (no baseColoration) leave these as 0;
+  // the renderer skips the write entirely for those via M_HAS_BASE[eid].
+  colorR : new Uint8Array(GRID_SIZE),
+  colorG : new Uint8Array(GRID_SIZE),
+  colorB : new Uint8Array(GRID_SIZE),
   // Per-cell static-friction accumulator (0..1000)
   settled : new Uint16Array(GRID_SIZE),
 
@@ -510,6 +698,15 @@ const grid = {
 }
 // Initialize temperatures to ambient
 for (let i = 0; i < GRID_SIZE; i++) grid.temps[i] = 20;
+
+// Initialize per-cell color arrays to E_EMPTY's base color. Typed arrays default to 0 which would render as pitch
+// black, when we want the proper background color baked from E_EMPTY's baseColoration
+{
+  const emptyC = M_PREVIEW_COLOR[E_EMPTY];
+  grid.colorR.fill(emptyC[0]);
+  grid.colorG.fill(emptyC[1]);
+  grid.colorB.fill(emptyC[2]);
+}
 
 // Grid coordinate helpers
 /**
@@ -550,45 +747,44 @@ function cellInBounds(x, y) {
 // Grid CRUD
 
 /**
- * Sets the cell at position (x,y) to a new given element, with optional temperature override. This is considered
- * the CREATION of an element, not just movement of an existing one.
- * @param {number} x - column, 0 to COLS-1
- * @param {number} y - row, 0 to ROWS-1
- * @param {number} element - the element ID to write (e.g. E_WATER)
- * @param {number} [temperature] - optional temperature override; defaults to DEFAULT_TEMP[eid]
+ * Helper runs the element's baseColoration generator (if any) and writes the resulting (r,g,b) tuple
+ * into grid.colorR/G/B[i]. Called from setCell exactly once at spawn per cell. For shader-only elements
+ * (no baseColoration), the renderer skips the base color write for those via M_HAS_BASE[eid] and the shader
+ * paints from scratch.
+ * @param {number} i - flat grid index
+ * @param {number} element - element ID being spawned
  */
-function setCell(x, y, element, temperature) {
-  // Return on bad coordinates
-  if (!cellInBounds(x, y)) return;
-
-  // Write the element ID
-  const i = cellIndex(x, y);
+function applyBaseColoration(i, element) {
+  const gen = M_BASE_COLORATION[element];
+  if (gen === null) return;
+  const rgb = gen();
+  grid.colorR[i] = rgb[0];
+  grid.colorG[i] = rgb[1];
+  grid.colorB[i] = rgb[2];
+}
+/**
+ * Sets the cell at flat index i to a new element, with the given temperature. This is the ONLY primitive
+ * for any operation that changes what an element is (paint/erase, scene spawn, in-place metamorphosis, etc). The
+ * function will NOT silently pick a default temperature for you (use grid.temps[i] to preserve current). This way
+ * everything is nice and self documenting.
+ * @param {number} i - flat grid index
+ * @param {number} element - the element ID to write (e.g. E_WATER)
+ * @param {number} temp - temperature to set the cell to
+ */
+function setCell(i, element, temp) {
   grid.elements[i] = element;
-
-  // Set to the provided temperature if given, otherwise this element's default
-  if (temperature !== undefined) {
-    grid.temps[i] = temperature;
-  }
-  else {
-    grid.temps[i] = M_DEFAULT_TEMP[element];
-  }
+  grid.temps[i] = temp;
 
   // If this element has a lifetime, seed it with a small random offset for visual variety.
   // LIFETIME[eid] is 0 for elements that don't decay, which naturally falls through to 0 here.
   const baseLifetime = M_LIFETIME[element];
-  if (baseLifetime > 0) {
-    grid.lifetimes[i] = baseLifetime + randInt(20);
-  }
-  else {
-    grid.lifetimes[i] = 0;
-  }
+  grid.lifetimes[i] = baseLifetime > 0 ? baseLifetime + randInt(20) : 0;
 
   // Remove flags for this cell.
   grid.flags[i] = 0;
 
-  // Seed a per-cell color-noise byte (0..31). Currently only read by shadeSand, but seeded
-  // unconditionally so any future per-cell shader has the data without a spawn-path branch.
-  grid.colorNoise[i] = (Math.random() * 32) | 0;
+  // Generate the spawn-time base color (or no-op if element is shader-only).
+  applyBaseColoration(i, element);
 
   // A freshly-spawned cell starts un-settled, meaning it gets to slide diagonally on its first few
   // frames before friction commits it.
@@ -599,20 +795,21 @@ function setCell(x, y, element, temperature) {
   wakeNeighborsOf(i);
 }
 /**
- * Clears the cell at flat grid index i. Heat is retained by air briefly.
+ * Clears the cell at flat grid index i. Heat is retained by air briefly. By default, wakes up 8 neighbors.
  * @param {number} i - flat grid index
  * @param {boolean} [wakeNeighbors] - default true. Set false to suppress neighbor wake-up
- *   (used by moveCell for natural-cascade moves, see body comment).
  */
 function clearCell(i, wakeNeighbors = true) {
   grid.elements[i] = E_EMPTY;
   grid.lifetimes[i] = 0;
   grid.flags[i] = 0;
-  grid.colorNoise[i] = 0;
+  // Apply E_EMPTY's baseColoration rather than zeroing — otherwise the cell renders pitch
+  // black until something else paints over it (visible as a trail behind any falling sand).
+  applyBaseColoration(i, E_EMPTY);
   grid.settled[i] = 0;
   // Keep temperature, air retains heat briefly
 
-  // Removed support → wake neighbors so previously-settled cells reconsider their footing.
+  // Removed support -> wake neighbors so previously-settled cells reconsider their footing.
   // Default true for direct/explicit clears (eraser via setCell, transformations). moveCell
   // overrides to false on "natural cascade" moves (an unsettled cell sliding). Without that
   // override, every grain that slides off a pile would re-wake the surrounding settled cells,
@@ -620,7 +817,7 @@ function clearCell(i, wakeNeighbors = true) {
   if (wakeNeighbors) wakeNeighborsOf(i);
 }
 /**
- * Moves cell i to cell j, *overwriting* what was previously in cell entirely.
+ * Moves cell i to cell j, overwriting what was previously in cell entirely.
  * @param {number} i - flat grid index of the cell targeted to be moved
  * @param {number} j - flat grid index of the cell to be moved to
  */
@@ -630,7 +827,9 @@ function moveCell(i, j) {
   grid.temps[j] = grid.temps[i];
   grid.lifetimes[j] = grid.lifetimes[i];
   grid.flags[j] = grid.flags[i];
-  grid.colorNoise[j] = grid.colorNoise[i];
+  grid.colorR[j] = grid.colorR[i];
+  grid.colorG[j] = grid.colorG[i];
+  grid.colorB[j] = grid.colorB[i];
   // The cell at j just MOVED, so it's un-settled at its new position regardless of what it was before.
   grid.settled[j] = 0;
 
@@ -676,21 +875,27 @@ function swapCells(i, j) {
   const iTemp = grid.temps[i];
   const iLifetime = grid.lifetimes[i];
   const iFlag = grid.flags[i];
-  const iColorNoise = grid.colorNoise[i];
+  const iColorR = grid.colorR[i];
+  const iColorG = grid.colorG[i];
+  const iColorB = grid.colorB[i];
 
   // Copy cell j into cell i
   grid.elements[i] = grid.elements[j];
   grid.temps[i] = grid.temps[j];
   grid.lifetimes[i] = grid.lifetimes[j];
   grid.flags[i] = grid.flags[j];
-  grid.colorNoise[i] = grid.colorNoise[j];
+  grid.colorR[i] = grid.colorR[j];
+  grid.colorG[i] = grid.colorG[j];
+  grid.colorB[i] = grid.colorB[j];
 
   // Write the saved cell i data into cell j.
   grid.elements[j] = iElement;
   grid.temps[j] = iTemp;
   grid.lifetimes[j] = iLifetime;
   grid.flags[j] = iFlag;
-  grid.colorNoise[j] = iColorNoise;
+  grid.colorR[j] = iColorR;
+  grid.colorG[j] = iColorG;
+  grid.colorB[j] = iColorB;
 
   // Both cells have now moved this frame.
   grid.movedThisFrame[i] = 1;
@@ -702,9 +907,9 @@ function swapCells(i, j) {
   grid.settled[j] = 0;
 }
 /**
- * Resets the `settled` counter to 0 for the Moore-8 neighbors of cell i. Called whenever
- * cell i changes state (cleared, painted, moved out of) so previously-settled cells around
- * it get a chance to reconsider their footing on the next movePowder pass.
+ * Resets the `settled` counter to 0 for the Moore-8 neighbors of cell i. Called whenever cell i changes state
+ * (cleared, painted, moved out of) so previously-settled cells around it get a chance to reconsider their
+ * footing on the next movePowder pass.
  * @param {number} i - flat grid index whose neighbors should wake
  */
 function wakeNeighborsOf(i) {
@@ -893,26 +1098,23 @@ function tickCell(x, y) {
 
   // Ignition/flammability
   if (M_IGNITION_CHANCE[e] > 0 && temp >= M_BURN_TEMP[e] && randChance(M_IGNITION_CHANCE[e])) {
-    grid.elements[i] = E_FIRE;
-    grid.lifetimes[i] = M_LIFETIME[E_FIRE] + randInt(60)
-    grid.temps[i] = 500;
+    setCell(i, E_FIRE, 500);
+    grid.lifetimes[i] = M_LIFETIME[E_FIRE] + randInt(60);   // wider variance than setCell's default randInt(20)
     return;
   }
 
   // === Element-specific dispatch. Each handler is defined below in the same order as the cases.
-  // `temp` is threaded into handlers that read it, so they don't redo grid.temps[i]. The typed-array
-  // read is cheap but happens per active cell per frame, and on a screen-of-water that adds up.
   switch (e) {
-    case E_WATER:     tickWater(i, temp);     break;
-    case E_STEAM:     tickSteam(i, temp);     break;
-    case E_ICE:       tickIce(i, temp);       break;
+    case E_WATER:     tickWater(i, temp);           break;
+    case E_STEAM:     tickSteam(i, temp);           break;
+    case E_ICE:       tickIce(i, temp);             break;
     case E_LAVA:      tickLava(i, x, y, temp);      break;
-    case E_STONE:     tickStone(i, temp);     break;
-    case E_SAND:      tickSand(i, temp);      break;
-    case E_GLASS:     tickGlass(i, temp);     break;
+    case E_STONE:     tickStone(i, temp);           break;
+    case E_SAND:      tickSand(i, temp);            break;
+    case E_GLASS:     tickGlass(i, temp);           break;
     case E_FIRE:      tickFire(i, x, y);            break;
-    case E_SMOKE:     tickSmoke(i);           break;
-    case E_EMBER:     tickEmber(i);           break;
+    case E_SMOKE:     tickSmoke(i);                 break;
+    case E_EMBER:     tickEmber(i);                 break;
     case E_SPARK:     tickSpark(i, x, y);           break;
     case E_GUNPOWDER: tickGunpowder(i, x, y, temp); break;
     case E_PLANT:     tickPlant(i, x, y);           break;
@@ -926,10 +1128,8 @@ function tickCell(x, y) {
 // === Per-element tick handlers ===
 
 // One named function per element with bespoke behavior. tickCells dispatches into the right handler via a
-// jump-table switch — each call site is monomorphic, so V8/SpiderMonkey either inline these back into the
+// jump-table switch. Each call site is monomorphic, so V8/SpiderMonkey either inline these back into the
 // hot loop (zero overhead) or emit a cheap call (~ns). Order below matches the dispatch order in tickCells.
-
-
 /**
  * Evaporation to STEAM and freezing to ICE.
  * @param {number} i - flat grid index
@@ -938,16 +1138,14 @@ function tickCell(x, y) {
 function tickWater(i, temp) {
   // Evaporation
   if (temp >= 100) {
-    grid.elements[i] = E_STEAM;
-    grid.lifetimes[i] = 700 + randInt(300);
-    grid.temps[i] = 130;
+    setCell(i, E_STEAM, 130);
+    grid.lifetimes[i] = 700 + randInt(300);   // boiled-water steam lives longer than baseline M_LIFETIME[E_STEAM]
   }
   // Freezing
   else if (temp <= -2) {
-    grid.elements[i] = E_ICE;
+    setCell(i, E_ICE, temp);   // preserve the cold temp that caused freezing
   }
 }
-
 /**
  * Precipitation to WATER, and dissipates to nothing.
  * @param {number} i - flat grid index
@@ -956,16 +1154,13 @@ function tickWater(i, temp) {
 function tickSteam(i, temp) {
   // Precipitation
   if (temp < 60) {
-    grid.elements[i] = E_WATER;
-    grid.lifetimes[i] = 0;
-    grid.temps[i] = 50;
+    setCell(i, E_WATER, 50);
   }
   // Dissipation
   else if (--grid.lifetimes[i] <= 0) {
     clearCell(i);
   }
 }
-
 /**
  * Melting to WATER.
  * @param {number} i - flat grid index
@@ -973,11 +1168,9 @@ function tickSteam(i, temp) {
  */
 function tickIce(i, temp) {
   if (temp >= 1) {
-    grid.elements[i] = E_WATER;
+    setCell(i, E_WATER, temp);   // preserve the warmth that caused melting
   }
 }
-
-
 /**
  * Quenching on water contact, self-heating, and cooling down enough to harden to STONE.
  * @param {number} i - flat grid index
@@ -1002,17 +1195,14 @@ function tickLava(i, x, y, temp) {
   }
 
   if (waterI !== -1) {
-    // React: this lava → STONE, the contacted water → STEAM.
-    grid.elements[i] = E_STONE;
-    grid.temps[i] = 380;
-    grid.lifetimes[i] = 0;
+    // React: this lava -> STONE, the contacted water -> STEAM.
+    setCell(i, E_STONE, 380);
 
-    grid.elements[waterI] = E_STEAM;
-    grid.temps[waterI] = 150;
-    grid.lifetimes[waterI] = 800 + randInt(400);
+    setCell(waterI, E_STEAM, 150);
+    grid.lifetimes[waterI] = 800 + randInt(400);   // long-lived burst steam (wider than default)
     grid.tickedThisFrame[waterI] = 1;
 
-    // Crust nearby lava — quench radius 2 with falloff, so a sea pour makes a thick crust.
+    // Crust nearby lava, quench radius 2 with falloff, so a sea pour makes a thick crust.
     for (let dy = -2; dy <= 2; dy++) {
       for (let dx = -2; dx <= 2; dx++) {
         if (!dx && !dy) continue;
@@ -1023,9 +1213,7 @@ function tickLava(i, x, y, temp) {
           const dist = Math.abs(dx) + Math.abs(dy);
           const p = dist === 1 ? 0.55 : dist === 2 ? 0.22 : 0.08;
           if (Math.random() < p) {
-            grid.elements[k] = E_STONE;
-            grid.temps[k] = 360;
-            grid.lifetimes[k] = 0;
+            setCell(k, E_STONE, 360);
             grid.tickedThisFrame[k] = 1;
           } else {
             grid.temps[k] -= 30;   // cool the rest a bit
@@ -1043,9 +1231,8 @@ function tickLava(i, x, y, temp) {
         if (!cellInBounds(nx, ny)) continue;
         const k = cellIndex(nx, ny);
         if (grid.elements[k] === E_EMPTY && Math.random() < 0.45) {
-          grid.elements[k] = E_STEAM;
-          grid.temps[k] = 140;
-          grid.lifetimes[k] = 600 + randInt(400);
+          setCell(k, E_STEAM, 140);
+          grid.lifetimes[k] = 600 + randInt(400);   // wider lifetime for burst steam
           grid.tickedThisFrame[k] = 1;
         }
       }
@@ -1060,11 +1247,9 @@ function tickLava(i, x, y, temp) {
   }
   // Harden back to STONE
   if (temp < 480) {
-    grid.elements[i] = E_STONE;
-    grid.temps[i] = 460;
+    setCell(i, E_STONE, 460);
   }
 }
-
 /**
  * Melting to LAVA.
  * @param {number} i - flat grid index
@@ -1072,11 +1257,9 @@ function tickLava(i, x, y, temp) {
  */
 function tickStone(i, temp) {
   if (temp >= 1100) {
-    grid.elements[i] = E_LAVA;
-    grid.temps[i] = 700;
+    setCell(i, E_LAVA, 700);
   }
 }
-
 /**
  * Blasting to GLASS
  * @param {number} i - flat grid index
@@ -1084,11 +1267,9 @@ function tickStone(i, temp) {
  */
 function tickSand(i, temp) {
   if (temp >= 700) {
-    grid.elements[i] = E_GLASS;
-    grid.temps[i] = 500;
+    setCell(i, E_GLASS, 500);
   }
 }
-
 /**
  * Melting to LAVA
  * @param {number} i - flat grid index
@@ -1096,11 +1277,9 @@ function tickSand(i, temp) {
  */
 function tickGlass(i, temp) {
   if (temp >= 1000) {
-    grid.elements[i] = E_LAVA;
-    grid.temps[i] = 800;
+    setCell(i, E_LAVA, 800);
   }
 }
-
 /**
  * Fire dies down naturally pretty quick.
  * @param {number} i - flat grid index
@@ -1112,9 +1291,8 @@ function tickFire(i, x, y) {
   if (--grid.lifetimes[i] <= 0) {
     // 40% chance to create smoke on dying down
     if (randChance(0.4)) {
-      grid.elements[i] = E_SMOKE;
-      grid.lifetimes[i] = 120 + randInt(80);
-      grid.temps[i] = 80;
+      setCell(i, E_SMOKE, 80);
+      grid.lifetimes[i] = 120 + randInt(80);   // dying-fire smoke has shorter lifetime than default, so a quick puff
     }
     else {
       clearCell(i);
@@ -1133,22 +1311,19 @@ function tickFire(i, x, y) {
       // If its empty, potentially spawn smoke or embers
       if (grid.elements[j] === E_EMPTY) {
         if (randChance(0.04)) {
-          grid.elements[j] = E_SMOKE;
-          grid.lifetimes[j] = 80 + randInt(60);
-          grid.temps[j] = 90;
+          setCell(j, E_SMOKE, 90);
+          grid.lifetimes[j] = 80 + randInt(60);   // wisp-of-smoke from fire — shorter than dissipating-pool smoke
           grid.tickedThisFrame[j] = 1;
         }
         else if (randChance(0.06)) {
-          grid.elements[j] = E_EMBER;
-          grid.lifetimes[j] = 14 + randInt(14);
-          grid.temps[j] = 380;
+          setCell(j, E_EMBER, 380);
+          grid.lifetimes[j] = 14 + randInt(14);   // brief ember spark
           grid.tickedThisFrame[j] = 1;
         }
       }
     }
   }
 }
-
 /**
  * Smoke dissipates.
  * @param {number} i - flat grid index
@@ -1158,7 +1333,6 @@ function tickSmoke(i) {
     clearCell(i);
   }
 }
-
 /**
  * Embers dissipate, or hold their temp.
  * @param {number} i - flat grid index
@@ -1171,7 +1345,6 @@ function tickEmber(i) {
     grid.temps[i] = 380;
   }
 }
-
 /**
  * TODO gonna fully rewrite spark, its just a weird fire that travels through water as is COME BACK HERE
  * @param {number} i - flat grid index
@@ -1195,14 +1368,11 @@ function tickSpark(i, x, y) {
     if (!cellInBounds(nx, ny)) continue;
     const j = cellIndex(nx,ny);
     if (grid.elements[j] === E_WATER) {
-      grid.elements[j] = E_SPARK;
-      grid.lifetimes[j] = 6 + randInt(4);
-      grid.temps[j] = 600;
+      setCell(j, E_SPARK, 600);
+      grid.lifetimes[j] = 6 + randInt(4);   // short conducted-spark life
       grid.tickedThisFrame[j] = 1;
 
-      grid.elements[i] = E_WATER;
-      grid.lifetimes[i] = 0;
-      grid.temps[i] = 30;
+      setCell(i, E_WATER, 30);   // we became the water cell we replaced; cooler than ambient
       break;
     }
     if (grid.elements[j] === E_GUNPOWDER) {
@@ -1210,7 +1380,6 @@ function tickSpark(i, x, y) {
     }
   }
 }
-
 /**
  * Handle detonation.
  * @param {number} i - flat grid index
@@ -1221,9 +1390,8 @@ function tickSpark(i, x, y) {
 function tickGunpowder(i, x, y, temp) {
   if (temp >= M_DETONATE_AT_TEMP[grid.elements[i]]) {
     // BOOM: convert to fire + spark, push neighbors
-    grid.elements[i] = E_FIRE;
-    grid.lifetimes[i] = 25 + randInt(25);
-    grid.temps[i] = 700;
+    setCell(i, E_FIRE, 700);
+    grid.lifetimes[i] = 25 + randInt(25);   // gunpowder-fire dies fast (sharp pop, not lingering burn)
 
     // Look at all 8 neighbors and either ignite or potentially spawn fire.
     for (let dy = -1; dy <= 1; dy++) {
@@ -1239,9 +1407,8 @@ function tickGunpowder(i, x, y, temp) {
         }
         if (grid.elements[j] === E_EMPTY) {
           if (randChance(0.5)) {
-            grid.elements[j] = E_FIRE;
-            grid.lifetimes[j] = 20 + randInt(20);
-            grid.temps[j] = 600;
+            setCell(j, E_FIRE, 600);
+            grid.lifetimes[j] = 20 + randInt(20);   // shrapnel-fire is brief
             grid.tickedThisFrame[j] = 1;
           }
         } else {
@@ -1254,7 +1421,6 @@ function tickGunpowder(i, x, y, temp) {
     }
   }
 }
-
 /**
  * Growing when near water.
  * @param {number} i - flat grid index
@@ -1285,18 +1451,13 @@ function tickPlant(i, x, y) {
     if (!cellInBounds(xx, yy)) continue;
     const j = cellIndex(xx,yy);
     if (grid.elements[j] === E_EMPTY || grid.elements[j] === E_WATER) {
-      grid.elements[j] = E_PLANT;
-      grid.temps[j] = 20;
-      grid.flags[j] = (grid.flags[i] || 0) + 1;
+      setCell(j, E_PLANT, 20);
+      grid.flags[j] = Math.min(18, (grid.flags[i] || 0) + 1);   // inherit + 1 from parent plant's age, capped at 18
       grid.tickedThisFrame[j] = 1;
-      if ((grid.flags[j] || 0) > 18) {
-        grid.flags[j] = 18;   // age cap
-      }
       break;
     }
   }
 }
-
 /**
  * Fuse gets lit when either hot enough OR adjacent to fire/spark/lit fuse, and handles burning out.
  * @param {number} i - flat grid index
@@ -1331,6 +1492,8 @@ function tickFuse(i, x, y, temp) {
     }
 
     // If fuse is now ignited, set it to its ignited state and give it a lifetime.
+    // NOTE: in-place state change (still E_FUSE), NOT a setCell — we want to preserve the
+    // fuse's color/grain identity and just flip the burning flag. setCell would re-spawn it.
     if (ignite) {
       grid.flags[i] = 1;
       grid.lifetimes[i] = 28 + randInt(8);
@@ -1345,9 +1508,8 @@ function tickFuse(i, x, y, temp) {
       // emit a small ember above if room, then become empty (or smoke briefly)
       if (y > 0 && grid.elements[i - COLS] === E_EMPTY) {
         const j = i - COLS;
-        grid.elements[j] = E_EMBER;
-        grid.lifetimes[j] = 20 + randInt(20);
-        grid.temps[j] = 380;
+        setCell(j, E_EMBER, 380);
+        grid.lifetimes[j] = 20 + randInt(20);   // slightly longer than default ember lifetime
         grid.tickedThisFrame[j] = 1;
       }
       // Ignite touching detonatable elements directly
@@ -1366,7 +1528,6 @@ function tickFuse(i, x, y, temp) {
     }
   }
 }
-
 /**
  * Acid EATS ALL (except glass etc)
  * @param {number} i - flat grid index
@@ -1397,7 +1558,6 @@ function tickAcid(i, x, y) {
     }
   }
 }
-
 /**
  * Melts ice on contact, slowly dissolves into water.
  * @param {number} i - flat grid index
@@ -1413,8 +1573,7 @@ function tickSalt(i, x, y) {
       if (!cellInBounds(nx, ny)) continue;
       const k = cellIndex(nx,ny);
       if (grid.elements[k] === E_ICE && randChance(0.25)) {
-        grid.elements[k] = E_WATER;
-        grid.temps[k] = 5;
+        setCell(k, E_WATER, 5);   // salt-melted ice produces cold water
         grid.tickedThisFrame[k] = 1;
       }
       else if (grid.elements[k] === E_WATER && randChance(0.04)) {
@@ -1424,7 +1583,6 @@ function tickSalt(i, x, y) {
     }
   }
 }
-
 /**
  * Spreads onto wet plants and oil; converts adjacent plants/oil to mold;
  * dies into a puff of dust/smoke when touched by fire or lava.
@@ -1454,10 +1612,8 @@ function tickMold(i, x, y) {
   }
   if (dies) {
     // Become a puff of smoke which drifts away
-    grid.elements[i] = E_SMOKE;
-    grid.lifetimes[i] = 100 + randInt(60);
-    grid.temps[i] = 90;
-    grid.flags[i] = 0;
+    setCell(i, E_SMOKE, 90);
+    grid.lifetimes[i] = 100 + randInt(60);   // moldy-death smoke is brief
     return;
   }
   // Try to convert one adjacent plant/oil cell into mold (faster when wet, still happens slowly when dry)
@@ -1472,9 +1628,7 @@ function tickMold(i, x, y) {
       const k = cellIndex(nx,ny);
       const ne = grid.elements[k];
       if (ne === E_PLANT || ne === E_OIL) {
-        grid.elements[k] = E_MOLD;
-        grid.flags[k] = 0;
-        grid.temps[k] = 20;
+        setCell(k, E_MOLD, 20);
         grid.tickedThisFrame[k] = 1;
         break;
       }
@@ -1503,9 +1657,8 @@ function igniteNeighbors(x, y) {
       // Direct ignition chance for flammable elements (IGNITION_CHANCE > 0 means flammable)
       const ignitionChance = M_IGNITION_CHANCE[ne];
       if (ignitionChance > 0 && randChance(ignitionChance * 1.2) && grid.temps[j] >= (M_BURN_TEMP[ne] - 50)) {
-        grid.elements[j] = E_FIRE;
-        grid.lifetimes[j] = 50 + randInt(50);
-        grid.temps[j] = 500;
+        setCell(j, E_FIRE, 500);
+        grid.lifetimes[j] = 50 + randInt(50);   // neighbor-ignited fire has medium variance
         grid.tickedThisFrame[j] = 1;
       }
       if (ne === E_GUNPOWDER && randChance(0.3)) {
@@ -1559,7 +1712,10 @@ function tryMove(i, nx, ny) {
     if (typeof reaction === "function") return reaction(i, j);
     const [resHere, resThere, prob] = reaction;
     if (Math.random() < prob) {
-      grid.elements[i] = resHere;  grid.elements[j] = resThere;
+      // Both cells metamorphose in place — preserve their current temperatures, since whatever
+      // physics caused the collision (impact, heat) is captured in the existing temp values.
+      setCell(i, resHere, grid.temps[i]);
+      setCell(j, resThere, grid.temps[j]);
       grid.movedThisFrame[i] = 1;  grid.movedThisFrame[j] = 1;
       return true;
     }
@@ -1806,11 +1962,12 @@ function moveFlame(i, x, y) {
 
 
 
-
-
+// =====================================================================
+//           Rendering - Drawing the canvas, baseColoration, Shaders, PostFX
+// =====================================================================
 //#region Rendering
 
-// Set up canvas and image data
+// First set up canvas and image data
 const canvas = document.getElementById("sim");
 canvas.width = COLS;
 canvas.height = ROWS;
@@ -1823,302 +1980,81 @@ const pix = imgData.data;
 // init alpha to 255
 for (let p = 3; p < pix.length; p += 4) pix[p] = 255;
 
+// Lil map views
 let heatView = false;
-let settleView = false;   // debug view: shows grid.settled state for the friction system
+let settleView = false;
 
 /**
- * Top-level render. A sequence of passes, in order:
+ * Top-level render handler. ach pass owns its own composite mode, its own iteration shape, and its own
+ * per-element dispatch. A sequence of passes, in order:
  *
- *   1) ONE pixel pass writes raw RGB into the `pix` ImageData buffer (either the normal
+ *   1. ONE pixel pass writes raw RGB into the `pix` ImageData buffer (either the normal
  *      color view or the heat-vis debug view, never both).
- *   2) putImageData flushes that buffer to the canvas.
- *   3) ZERO OR MORE overlay passes draw on TOP of the flushed pixels using Canvas 2D ops
+ *   2. putImageData flushes that buffer to the canvas.
+ *   3. ZERO OR MORE overlay passes draw on TOP of the flushed pixels using Canvas 2D ops
  *      (additive glow, brush preview, future fog/shimmer/bloom/etc).
- *
- * To add a new visual effect: write a new render*Pass() function and append a call to it
- * here. Each pass owns its own composite mode, its own iteration shape, and its own
- * per-element dispatch — no central registry of passes.
  */
 function render() {
-  // Pixel pass — fills `pix` with one RGB per cell (exactly one mode wins per frame)
+  // Pixel pass: fills `pix` with one RGB per cell (exactly one mode wins per frame)
   if      (heatView)   renderHeatView();
   else if (settleView) renderSettleView();
-  else                 renderMainPixelPass();
+  else                 renderMainView();
   ctx.putImageData(imgData, 0, 0);
 
   // Overlay passes — drawn on top of the flushed pixel buffer. Glow only fires in the
-  // normal color view (debug views are flat — adding glow would obscure the signal).
+  // normal color view (debug views are flat, adding glow would obscure the signal).
   if (!heatView && !settleView) renderGlowPass();
   if (mouse.in) renderBrushPreview();
 }
 
 
-// === Pixel passes ===
-// One (only one) of these runs each frame to fill `pix` with the per-cell RGB. Exactly one fires per
-// frame (gated by heatView in render). They never touch the canvas directly — render()
-// flushes `pix` via putImageData after the chosen pass returns.
 
+// *********************************************************************
+//           Rendering - Map Modes (MainPixelPass, HeatView, SettleView etc)
+// *********************************************************************
+//region === Map Modes ===
 
-//region === Color View ===
 
 /**
- * Pixel pass: NORMAL (color) mode. For each cell, paints the M_COLOR default into
- * `pix` first, then dispatches to a per-element shader handler for visual variations
- * (noise, depth, animation, lifetime, etc) which modifies the pixel in place. This
- * is the default rendering path.
+ * Pixel pass: MAIN (color) mode. Two-step per cell, stored base then per-frame shader.
+ *    1. If element has baseColoration, write grid.color[R/G/B][i] into pix[p..p+2]. BaseColoration is consistent
+ *    from the moment they're generated, they persist inside the cell.
+ *    2. If element has a shader, dispatch. Shader either MODIFIES the just-written base, or OVERWRITES it
+ *    from scratch (shader's call; no contract enforces either). Shader coloration is run every frame because it
+ *    depends on live state of the grid.
  */
-function renderMainPixelPass() {
+function renderMainView() {
   const data = pix;
   for (let i = 0, p = 0; i < GRID_SIZE; i++, p += 4) {
-    const eid = grid.elements[i];
+    const e = grid.elements[i];
 
-    // Default: paint M_COLOR. Handlers below may overwrite or modify in place.
-    const c = M_COLOR[eid];
-    data[p] = c[0]; data[p+1] = c[1]; data[p+2] = c[2];
+    // Step 1: write stored baseColoration (skipped for shader-only elements like FIRE).
+    if (M_HAS_BASE[e]) {
+      data[p]   = grid.colorR[i];
+      data[p+1] = grid.colorG[i];
+      data[p+2] = grid.colorB[i];
+    }
 
-    // === Shader dispatch. Each handler is defined below in the same order as the cases.
-    // (i, p, data) thread the cell's flat index, pixel offset, and pix buffer into every
-    // handler so they don't recompute them.
-    switch (eid) {
-      case E_SAND:     shadeSand(i, p, data);   break;
-      case E_STONE: case E_GUNPOWDER: case E_SALT:
-                       shadeGrainy(i, p, data); break;
+    // Step 2: per-frame shader dispatch
+    switch (e) {
+      case E_EMPTY:    shadeEmpty(i, p, data);  break;
       case E_WATER:    shadeWater(i, p, data);  break;
-      case E_LAVA:     shadeLava(i, p, data);   break;
       case E_FIRE:     shadeFire(p, data);      break;
+      case E_LAVA:     shadeLava(i, p, data);   break;
+      case E_STEAM:    shadeFading(i, p, data); break;
+      case E_PLANT:    shadePlant(i, p, data);  break;
+      case E_SMOKE:    shadeFading(i, p, data); break;
       case E_SPARK:    shadeSpark(p, data);     break;
       case E_FUSE:     shadeFuse(i, p, data);   break;
       case E_EMBER:    shadeEmber(p, data);     break;
       case E_MOLD:     shadeMold(i, p, data);   break;
-      case E_PLANT:    shadePlant(i, p, data);  break;
-      case E_STEAM:
-      case E_SMOKE:    shadeFading(i, p, data); break;
-      case E_EMPTY:    shadeEmpty(i, p, data);  break;
-      // Elements with no case (WALL, WOOD, ICE, GLASS, ACID, OIL) just keep the
-      // M_COLOR default painted above.
     }
   }
 }
 
-
-// === Per-element shader handlers ===
-// One named function per element (or group). renderMainPixelPass dispatches into the right
-// handler via a jump-table switch — each call site is monomorphic, so V8/SpiderMonkey can
-// inline these back into the hot loop. Order below matches the dispatch order above.
-//
-// Two flavors of handler:
-//   - ADDITIVE  (modifies the M_COLOR default already written to data[p..p+2])
-//   - OVERWRITE (writes data[p..p+2] from scratch, ignoring the default)
-
-
 /**
- * ADDITIVE shader for STONE/GUNPOWDER/SALT — adds static per-cell hash noise to
- * M_COLOR for a grainy speckled look. Noise is deterministic from grid index (no
- * animation, no memory cost). When a cell moves, its noise changes because `i`
- * changes — produces a faint visual "shuffle" while a pile is settling.
- * (Sand uses shadeSand instead — per-cell remembered noise, sandboxels style.)
- * @param {number} i - flat grid index
- * @param {number} p - pixel buffer offset (i * 4)
- * @param {Uint8ClampedArray} data - pix buffer to modify in place
- */
-function shadeGrainy(i, p, data) {
-  const j = (i * 9301 + 49297) & 31;
-  data[p]   += j - 16;
-  data[p+1] += (j - 16) * 0.7;
-  data[p+2] += (j - 16) * 0.4;
-}
-
-/**
- * ADDITIVE shader for SAND — reads each cell's REMEMBERED noise seed from
- * grid.colorNoise[i]. The seed is set at spawn and copied on move/swap, so a sand
- * grain keeps its exact color identity for its entire lifetime. Sandboxels-style.
- * Costs ~1 extra Uint8Array copy per moveCell/swapCells everywhere in the engine.
- * @param {number} i - flat grid index
- * @param {number} p - pixel buffer offset (i * 4)
- * @param {Uint8ClampedArray} data - pix buffer to modify in place
- */
-function shadeSand(i, p, data) {
-  const j = grid.colorNoise[i];
-  data[p]   += j - 16;
-  data[p+1] += (j - 16) * 0.7;
-  data[p+2] += (j - 16) * 0.4;
-}
-
-/**
- * OVERWRITE shader for WATER — depth-aware cyan-blue gradient.
- * @param {number} i - flat grid index
- * @param {number} p - pixel buffer offset (i * 4)
- * @param {Uint8ClampedArray} data - pix buffer to write into
- */
-function shadeWater(i, p, data) {
-  // depth-aware tint: count up to 6 cells of water above for depth.
-  // surface = brighter cyan-blue; deep = saturated dark blue.
-  let depth = 0;
-  let k = i;
-  for (let d = 0; d < 6; d++) {
-    if (k < COLS) break;
-    k -= COLS;
-    if (grid.elements[k] === E_WATER) depth++;
-    else break;
-  }
-  // depth 0 = surface, 6 = deep
-  const t01 = depth / 6;          // 0..1
-  const noise = ((i * 17 + frame) & 5);
-  // surface (light cyan-blue) → deep (rich dark blue)
-  data[p]   =  90 - t01 *  78 + noise;     // 90 → 12
-  data[p+1] = 165 - t01 * 100 + noise;     // 165 → 65
-  data[p+2] = 230 - t01 *  50 + noise;     // 230 → 180
-}
-
-/**
- * ADDITIVE shader for LAVA — animated frame-driven noise. Brightens red, dims green
- * slightly. Blue is left as M_COLOR.
- * @param {number} i - flat grid index
- * @param {number} p - pixel buffer offset (i * 4)
- * @param {Uint8ClampedArray} data - pix buffer to modify in place
- */
-function shadeLava(i, p, data) {
-  const j = ((i + (frame >> 1)) * 17) & 31;
-  data[p]   += j - 8;
-  data[p+1] += (j - 16) * 0.6;
-}
-
-/**
- * OVERWRITE shader for FIRE — per-frame random orange/red flicker. Doesn't use `i`
- * or M_COLOR.
- * @param {number} p - pixel buffer offset (i * 4)
- * @param {Uint8ClampedArray} data - pix buffer to write into
- */
-function shadeFire(p, data) {
-  const k = (Math.random() * 60) | 0;
-  data[p]   = Math.min(255, 200 + k);
-  data[p+1] = 80 + ((Math.random() * 100) | 0);
-  data[p+2] = 20 + ((Math.random() * 40) | 0);
-}
-
-/**
- * OVERWRITE shader for SPARK — per-frame random bright yellow flicker.
- * @param {number} p - pixel buffer offset (i * 4)
- * @param {Uint8ClampedArray} data - pix buffer to write into
- */
-function shadeSpark(p, data) {
-  const k = (Math.random() * 60) | 0;
-  data[p]   = 255;
-  data[p+1] = 220 + k - 30;
-  data[p+2] = 100 + k;
-}
-
-/**
- * OVERWRITE shader for FUSE — burning orange/red pulse when lit (grid.flags[i] === 1),
- * cold tan rope color otherwise.
- * @param {number} i - flat grid index
- * @param {number} p - pixel buffer offset (i * 4)
- * @param {Uint8ClampedArray} data - pix buffer to write into
- */
-function shadeFuse(i, p, data) {
-  if (grid.flags[i] === 1) {
-    // burning fuse — orange/red pulse based on remaining life
-    const k = (Math.random() * 50) | 0;
-    data[p]   = 240 + k - 25;
-    data[p+1] = 140 + k - 25;
-    data[p+2] = 30 + k - 25;
-  } else {
-    data[p]   = 180;
-    data[p+1] = 140;
-    data[p+2] = 80;
-  }
-}
-
-/**
- * OVERWRITE shader for EMBER — per-frame random warm orange flicker.
- * @param {number} p - pixel buffer offset (i * 4)
- * @param {Uint8ClampedArray} data - pix buffer to write into
- */
-function shadeEmber(p, data) {
-  const k = (Math.random() * 40) | 0;
-  data[p]   = 255;
-  data[p+1] = 150 + k;
-  data[p+2] = 30 + (k >> 1);
-}
-
-/**
- * OVERWRITE shader for MOLD — fuzzy organic per-cell noise with slow `frame`-driven pulse.
- * @param {number} i - flat grid index
- * @param {number} p - pixel buffer offset (i * 4)
- * @param {Uint8ClampedArray} data - pix buffer to write into
- */
-function shadeMold(i, p, data) {
-  // fuzzy organic noise — varies per cell, slow pulse
-  const n = ((i * 91 + (frame >> 3)) & 31);
-  data[p]   = 90 + n;
-  data[p+1] = 130 + (n >> 1);
-  data[p+2] = 70 + (n >> 2);
-}
-
-/**
- * OVERWRITE shader for PLANT — age-tinted green. Older plants (higher grid.flags[i])
- * shift toward warm/yellow.
- * @param {number} i - flat grid index
- * @param {number} p - pixel buffer offset (i * 4)
- * @param {Uint8ClampedArray} data - pix buffer to write into
- */
-function shadePlant(i, p, data) {
-  const a = grid.flags[i] || 0;
-  data[p]   = 60 + a * 4;
-  data[p+1] = 180 - a * 2;
-  data[p+2] = 80;
-}
-
-/**
- * ADDITIVE shader for STEAM/SMOKE — uniform brightness shift based on remaining lifetime,
- * so cells visually fade as they age toward dissipation.
- * @param {number} i - flat grid index
- * @param {number} p - pixel buffer offset (i * 4)
- * @param {Uint8ClampedArray} data - pix buffer to modify in place
- */
-function shadeFading(i, p, data) {
-  const k = ((grid.lifetimes[i] | 0) / 6) & 31;
-  data[p]   += k - 8;
-  data[p+1] += k - 8;
-  data[p+2] += k - 8;
-}
-
-/**
- * OVERWRITE shader for EMPTY — subtle warm/cool tint via cell temperature so heat
- * radiating through air is visible. Hot cells (t > 60) overwrite to a warm dark orange;
- * cold cells (t < 0) overwrite to a dark cool blue. Ambient cells leave M_COLOR in place.
- * @param {number} i - flat grid index
- * @param {number} p - pixel buffer offset (i * 4)
- * @param {Uint8ClampedArray} data - pix buffer to write into
- */
-function shadeEmpty(i, p, data) {
-  // subtle warm/cool tint via temperature, so heat is visible
-  const t = grid.temps[i];
-  if (t > 60) {
-    const k = Math.min(1, (t - 60) / 600);
-    data[p]   = 8 + k * 80;
-    data[p+1] = 6 + k * 20;
-    data[p+2] = 16;
-  } else if (t < 0) {
-    const k = Math.min(1, -t / 50);
-    data[p]   = 8;
-    data[p+1] = 6 + k * 20;
-    data[p+2] = 16 + k * 60;
-  }
-}
-
-//endregion === Color View ===
-
-/**
- * Pixel pass: SETTLE-VIS debug mode. Visualizes grid.settled state for the friction system.
- * Inverted gradient — ACTIVE cells pop, SETTLED cells fade:
- *   - Fully settled (s >= SETTLE_THRESHOLD): dim grey #333333. These cells fast-exit the
- *     movement pass; they're "doing nothing this frame," so we fade them out.
- *   - Active (s = 0, freshly woken or actively moving): bright red #dd1818. These are the
- *     cells we care about for debugging — disturbances, wakes, cells trying to slide.
- *   - In between: linear interpolation #dd1818 → #333333 as friction accumulates.
- *   - Empty cells: pure black. No friction state to report, fade entirely.
- * Toggled by the settleView flag (key: S).
+ * Pixel pass: SETTLE-VIS debug mode. Visualizes grid.settled state for the friction system. Inverted gradient so
+ * active cells pop, settled cells fade.
  */
 function renderSettleView() {
   const data = pix;
@@ -2144,9 +2080,8 @@ function renderSettleView() {
 }
 
 /**
- * Pixel pass: HEAT-VIS debug mode. Maps each cell's temperature (-50..1000) to a
- * blue → red → yellow heatmap and writes to `pix`. Empty cells are dimmed so the
- * structure of the scene stays visible at a glance. Toggled by the heatView flag.
+ * Pixel pass: HEAT-VIS debug mode. Maps each cell's temperature (-50..1000) to a blue -> red -> yellow heatmap. Empty
+ * cells are dimmed so the structure of the scene stays visible at a glance.
  */
 function renderHeatView() {
   const data = pix;
@@ -2165,12 +2100,217 @@ function renderHeatView() {
   }
 }
 
+//endregion === Map Modes ===
 
-// === Overlay passes ===
-// Run AFTER putImageData has flushed the pixel buffer to the canvas. These draw on top
-// using Canvas 2D ops (fillRect, arc, etc) and own their own composite mode.
 
-//region === Glow Effects ===
+
+// *********************************************************************
+//           Rendering - BaseColoration Generators
+// *********************************************************************
+//region === BaseColoration ===
+
+/**
+ * Shared helper for elements that use a base color + per-grain pseudo-random tint. Produces a "speckled grain" look
+ * @param {number} baseR - red (0-255) per-grain variation adds ±16
+ * @param {number} baseG - green (0-255) per-grain variation adds ~±11 (70% of red's)
+ * @param {number} baseB - blue (0-255) per-grain variation adds ~±6 (40% of red's)
+ * @returns {[number, number, number]} per-cell varied (r, g, b) tuple in 0-255 range
+ */
+function makeGrainyVariation(baseR, baseG, baseB) {
+  const j = (Math.random() * 32) | 0;
+  return [baseR + j - 16, baseG + (j - 16) * 0.7, baseB + (j - 16) * 0.4];
+}
+
+/**
+ * BaseColoration for SAND: warm tan with per-grain noise variation.
+ * @returns {[number, number, number]} - (r, g, b) tuple in 0-255 range
+ */
+function baseSand() {
+  return makeGrainyVariation(224, 193, 113);
+}
+/**
+ * BaseColoration for STONE: dark gray with per-grain noise variation.
+ * @returns {[number, number, number]} - (r, g, b) tuple in 0-255 range
+ */
+function baseStone() {
+  return makeGrainyVariation(100,  90,  90);
+}
+/**
+ * BaseColoration for GUNPOWDER: near-black with per-grain noise variation.
+ * @returns {[number, number, number]} - (r, g, b) tuple in 0-255 range
+ */
+function baseGunpowder() {
+  return makeGrainyVariation( 60,  60,  60);
+}
+/**
+ * BaseColoration for SALT: near-white with per-grain noise variation.
+ * @returns {[number, number, number]}- (r, g, b) tuple in 0-255 range
+ */
+function baseSalt() {
+  return makeGrainyVariation(230, 230, 235);
+}
+
+//endregion === BaseColoration ===
+
+
+
+
+// *********************************************************************
+//           Rendering - Shaders
+// *********************************************************************
+//region === Shaders ===
+
+/**
+ * Shader for EMPTY: adds subtle warm/cool tint based on cell temperature so heat radiating through air is visible.
+ * Modifies the base dim-gray background only when temp is unusual. Cells at ambient temp keep their plain baseColoration.
+ * @param {number} i - flat grid index of the cell being shaded
+ * @param {number} p - pixel buffer byte offset (i * 4, pix is RGBA-packed)
+ * @param {Uint8ClampedArray} data - the pix ImageData buffer; shader writes RGB channels into data[p..p+2]
+ */
+function shadeEmpty(i, p, data) {
+  const t = grid.temps[i];
+  if (t > 60) {
+    const k = Math.min(1, (t - 60) / 600);
+    data[p]   = 8 + k * 80;
+    data[p+1] = 6 + k * 20;
+    data[p+2] = 16;
+  } else if (t < 0) {
+    const k = Math.min(1, -t / 50);
+    data[p]   = 8;
+    data[p+1] = 6 + k * 20;
+    data[p+2] = 16 + k * 60;
+  }
+}
+/**
+ * Shader for WATER: depth-aware cyan-blue gradient. Overwrites the flat base, counts up to 6 cells of water above
+ * to compute depth, surface = light, deep = dark
+ * @param {number} i - flat grid index of the cell being shaded
+ * @param {number} p - pixel buffer byte offset (i * 4, pix is RGBA-packed)
+ * @param {Uint8ClampedArray} data - the pix ImageData buffer; shader writes RGB channels into data[p..p+2]
+ */
+function shadeWater(i, p, data) {
+  let depth = 0;
+  let k = i;
+  for (let d = 0; d < 6; d++) {
+    if (k < COLS) break;
+    k -= COLS;
+    if (grid.elements[k] === E_WATER) depth++;
+    else break;
+  }
+  const t01 = depth / 6;
+  const noise = ((i * 17 + frame) & 5);
+  data[p]   =  90 - t01 *  78 + noise;     // 90 → 12
+  data[p+1] = 165 - t01 * 100 + noise;     // 165 → 65
+  data[p+2] = 230 - t01 *  50 + noise;     // 230 → 180
+}
+/**
+ * Shader for FIRE: per-frame random orange/red flicker. Pure overwrite (no base).
+ * @param {number} p - pixel buffer byte offset (i * 4, pix is RGBA-packed)
+ * @param {Uint8ClampedArray} data - the pix ImageData buffer; shader writes RGB channels into data[p..p+2]
+ */
+function shadeFire(p, data) {
+  const k = (Math.random() * 60) | 0;
+  data[p]   = Math.min(255, 200 + k);
+  data[p+1] = 80 + ((Math.random() * 100) | 0);
+  data[p+2] = 20 + ((Math.random() * 40) | 0);
+}
+/**
+ * Shader for LAVA: animated `frame`-driven noise. Modifies the stored red base.
+ * @param {number} i - flat grid index of the cell being shaded
+ * @param {number} p - pixel buffer byte offset (i * 4, pix is RGBA-packed)
+ * @param {Uint8ClampedArray} data - the pix ImageData buffer; shader writes RGB channels into data[p..p+2]
+ */
+function shadeLava(i, p, data) {
+  const j = ((i + (frame >> 1)) * 17) & 31;
+  data[p]   += j - 8;
+  data[p+1] += (j - 16) * 0.6;
+}
+/**
+ * Shader for [STEAM, SMOKE]: uniform brightness shift based on remaining lifetime; cells visibly fade as they age
+ * toward dissipation. Modifies base
+ * @param {number} i - flat grid index of the cell being shaded
+ * @param {number} p - pixel buffer byte offset (i * 4, pix is RGBA-packed)
+ * @param {Uint8ClampedArray} data - the pix ImageData buffer; shader writes RGB channels into data[p..p+2]
+ */
+function shadeFading(i, p, data) {
+  const k = ((grid.lifetimes[i] | 0) / 6) & 31;
+  data[p]   += k - 8;
+  data[p+1] += k - 8;
+  data[p+2] += k - 8;
+}
+/**
+ * Shader for PLANT: age-tinted green. Older plants (higher grid.flags[i]) shift warm/yellow
+ * Overwrites base
+ * @param {number} i - flat grid index of the cell being shaded
+ * @param {number} p - pixel buffer byte offset (i * 4, pix is RGBA-packed)
+ * @param {Uint8ClampedArray} data - the pix ImageData buffer; shader writes RGB channels into data[p..p+2]
+ */
+function shadePlant(i, p, data) {
+  const a = grid.flags[i] || 0;
+  data[p]   = 60 + a * 4;
+  data[p+1] = 180 - a * 2;
+  data[p+2] = 80;
+}
+/**
+ * Shader for SPARK: per-frame random bright yellow flicker. Pure overwrite (no base)
+ * @param {number} p - pixel buffer byte offset (i * 4, pix is RGBA-packed)
+ * @param {Uint8ClampedArray} data - the pix ImageData buffer; shader writes RGB channels into data[p..p+2]
+ */
+function shadeSpark(p, data) {
+  const k = (Math.random() * 60) | 0;
+  data[p]   = 255;
+  data[p+1] = 220 + k - 30;
+  data[p+2] = 100 + k;
+}
+/**
+ * Shader for FUSE: paints a burning orange/red pulse when lit. Unlit fuse keeps its
+ * stored base color (early-return), only burning cells incur the per-frame overwrite cost.
+ * @param {number} i - flat grid index of the cell being shaded
+ * @param {number} p - pixel buffer byte offset (i * 4, pix is RGBA-packed)
+ * @param {Uint8ClampedArray} data - the pix ImageData buffer; shader writes RGB channels into data[p..p+2]
+ */
+function shadeFuse(i, p, data) {
+  if (grid.flags[i] !== 1) return;   // unlit: stored base color stands
+  const k = (Math.random() * 50) | 0;
+  data[p]   = 240 + k - 25;
+  data[p+1] = 140 + k - 25;
+  data[p+2] = 30 + k - 25;
+}
+/**
+ * Shader for EMBER: per-frame random warm orange flicker. Pure overwrite (no base).
+ * @param {number} p - pixel buffer byte offset (i * 4, pix is RGBA-packed)
+ * @param {Uint8ClampedArray} data - the pix ImageData buffer; shader writes RGB channels into data[p..p+2]
+ */
+function shadeEmber(p, data) {
+  const k = (Math.random() * 40) | 0;
+  data[p]   = 255;
+  data[p+1] = 150 + k;
+  data[p+2] = 30 + (k >> 1);
+}
+/**
+ * Shader for MOLD: slow `frame`-driven creep of green fuzziness across the screen.
+ * @param {number} i - flat grid index of the cell being shaded
+ * @param {number} p - pixel buffer byte offset (i * 4, pix is RGBA-packed)
+ * @param {Uint8ClampedArray} data - the pix ImageData buffer; shader writes RGB channels into data[p..p+2]
+ */
+function shadeMold(i, p, data) {
+  const k = ((i * 91 + (frame >> 3)) & 31);  // +-3 brightness shift
+  data[p]   = 90 + k;
+  data[p+1] = 130 + (k >> 1);
+  data[p+2] = 70 + (k >> 2);
+}
+
+//endregion === Shaders ===
+
+
+
+// *********************************************************************
+//           Rendering - PostFX
+// *********************************************************************
+//region === PostFX ===
+
+
+//region Glow Effects
 
 /**
  * Overlay pass: additive glow for hot/lit cells. Paints a 3x3 translucent dab centered
@@ -2248,12 +2388,12 @@ function glowFuse(i, x, y) {
   ctx.fillRect(x - 1, y - 1, 3, 3);
 }
 
-//endregion === Glow Effects ===
+//endregion Glow Effects
 
+//region Misc
 
 /**
- * Overlay pass: UI brush preview. Draws a circle at the mouse position showing the
- * current brush size. Single op per frame, perf-irrelevant.
+ * Overlay pass: UI brush preview. Draws a circle at the mouse position showing the current brush size
  */
 function renderBrushPreview() {
   ctx.save();
@@ -2265,7 +2405,15 @@ function renderBrushPreview() {
   ctx.restore();
 }
 
-//#endregion
+//endregion Misc
+
+
+//endregion === PostFX ===
+
+
+//endregion Rendering
+
+
 
 
 //#region Input
@@ -2276,13 +2424,14 @@ let currentEl = E_SAND;          // the currently-selected paint element ID
 let heatPen = 20;
 
 /**
- * Paints a brush stroke (circular splat of radius `brushSize`) of the given element.
+ * Paints a brush stroke (circular splat of radius `brushSize`) of the given element at the
+ * given temperature. Temperature is REQUIRED — callers must state intent explicitly.
  * @param {number} gx - grid x of brush center
  * @param {number} gy - grid y of brush center
  * @param {number} eid - element ID to paint
- * @param {number} [t] - optional temperature override; defaults to DEFAULT_TEMP[eid] inside setCell
+ * @param {number} temp - temperature to spawn each cell at
  */
-function paintAt(gx, gy, eid, t) {
+function paintAt(gx, gy, eid, temp) {
   const kind = M_KIND[eid];
   const sparser = (kind === KIND_GAS || kind === KIND_POWDER) && eid !== E_EMPTY;
   const r = brushSize;
@@ -2293,7 +2442,7 @@ function paintAt(gx, gy, eid, t) {
       if (!cellInBounds(x, y)) continue;
       // gases/powders sparser fill so they don't oversaturate
       if (sparser && Math.random() > 0.55) continue;
-      setCell(x, y, eid, t);
+      setCell(cellIndex(x, y), eid, temp);
     }
   }
 }
@@ -2322,7 +2471,7 @@ function updateMouse(ev) {
 
 function doPaint() {
   if (mouse.btn === 2) {
-    paintAt(mouse.gx, mouse.gy, E_EMPTY);
+    paintAt(mouse.gx, mouse.gy, E_EMPTY, M_DEFAULT_TEMP[E_EMPTY]);
   } else {
     paintAt(mouse.gx, mouse.gy, currentEl, M_DEFAULT_TEMP[currentEl]);
   }
@@ -2350,7 +2499,7 @@ PALETTE_ORDER.forEach((eid, idxOrder) => {
   b.className = "pBtn";
   b.dataset.eid = eid;
   b.title = M_NAME[eid] + (idxOrder < 9 ? `  [${idxOrder+1}]` : "");
-  const c = M_COLOR[eid];
+  const c = M_PREVIEW_COLOR[eid];
   b.innerHTML = `<span class="swatch" style="background:rgb(${c[0]},${c[1]},${c[2]})"></span><span>${M_NAME[eid]}</span>`;
   b.addEventListener("click", () => selectElement(eid));
   paletteEl.appendChild(b);
@@ -2381,7 +2530,16 @@ function clearAll() {
   grid.elements.fill(E_EMPTY);
   grid.lifetimes.fill(0);
   grid.flags.fill(0);
+  grid.settled.fill(0);
   for (let i = 0; i < GRID_SIZE; i++) grid.temps[i] = 20;
+
+  // Reset per-cell color arrays to E_EMPTY's base. Without this, the OLD scene's color
+  // values remain in colorR/G/B and render as ghosts where the new scene didn't paint.
+  // (Same logic as initial grid setup.)
+  const emptyC = M_PREVIEW_COLOR[E_EMPTY];
+  grid.colorR.fill(emptyC[0]);
+  grid.colorG.fill(emptyC[1]);
+  grid.colorB.fill(emptyC[2]);
 }
 
 window.addEventListener("keydown", ev => {
@@ -2405,13 +2563,22 @@ window.addEventListener("keydown", ev => {
 const _RX = 200, _RY = 140;
 const SX = (x) => (x * COLS / _RX) | 0;
 const SY = (y) => (y * ROWS / _RY) | 0;
-function rect(x0, y0, x1, y1, element) { // TODO - you left off here m8
-  for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) setCell(x, y, element);
+// Scene helpers default temperature to the element's M_DEFAULT_TEMP. This is an authoring-
+// convenience boundary, not a silent assumption — scene setup unambiguously spawns fresh
+// elements at room/element-default temp. Pass an explicit temp if you want otherwise.
+function rect(x0, y0, x1, y1, element) {
+  const t = M_DEFAULT_TEMP[element];
+  for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) {
+    if (cellInBounds(x, y)) setCell(cellIndex(x, y), element, t);
+  }
 }
 function R(x0, y0, x1, y1, element) {
   rect(SX(x0), SY(y0), SX(x1), SY(y1), element);
 }
-function S(x, y, element) { setCell(SX(x), SY(y), element); }
+function S(x, y, element) {
+  const sx = SX(x), sy = SY(y);
+  if (cellInBounds(sx, sy)) setCell(cellIndex(sx, sy), element, M_DEFAULT_TEMP[element]);
+}
 
 
 // noinspection JSUnusedGlobalSymbols
@@ -2429,7 +2596,7 @@ const SCENES = {
       const innerHalf = Math.max(0, outerHalf - (6 * wScale) | 0);
       for (let x = cx - outerHalf; x <= cx + outerHalf; x++) {
         const dist = Math.abs(x - cx);
-        if (dist > innerHalf) setCell(x, y, E_STONE);
+        if (dist > innerHalf && cellInBounds(x, y)) setCell(cellIndex(x, y), E_STONE, M_DEFAULT_TEMP[E_STONE]);
       }
     }
     // lava chamber inside the cone (lower portion only)
@@ -2438,7 +2605,9 @@ const SCENES = {
       const refDy = (y - yTop) / (yBot - yTop) * 70;
       const outerHalf = ((8 + refDy * 0.7) * wScale) | 0;
       const innerHalf = Math.max(0, outerHalf - (6 * wScale) | 0);
-      for (let x = cx - innerHalf; x < cx + innerHalf; x++) setCell(x, y, E_LAVA);
+      for (let x = cx - innerHalf; x < cx + innerHalf; x++) {
+        if (cellInBounds(x, y)) setCell(cellIndex(x, y), E_LAVA, M_DEFAULT_TEMP[E_LAVA]);
+      }
     }
     R(155, 30, 195, 60, E_WATER);
     R(150, 60, 200, 64, E_WALL);
