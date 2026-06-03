@@ -960,18 +960,6 @@ let frame = 0;
  * Advances a single step (frame) and handle heat diffusion, ticking every cell for reactions, and movement.
  */
 function step() {
-  // DEBUG
-  let active = 0, settling = 0, dormant = 0;
-  for (let i = 0; i < GRID_SIZE; i++) {
-    if (M_KIND[grid.elements[i]] !== KIND_POWDER) continue;
-    const s = grid.settled[i];
-    if (s === 0) active++;
-    else if (s < SETTLE_THRESHOLD) settling++;
-    else dormant++;
-  }
-  if (frame % 10 === 0) console.log(`active:${active} settling:${settling} dormant:${dormant}`);
-
-
   // Advance a single frame.
   frame++;
 
