@@ -960,6 +960,18 @@ let frame = 0;
  * Advances a single step (frame) and handle heat diffusion, ticking every cell for reactions, and movement.
  */
 function step() {
+  // DEBUG
+  let active = 0, settling = 0, dormant = 0;
+  for (let i = 0; i < GRID_SIZE; i++) {
+    if (M_KIND[grid.elements[i]] !== KIND_POWDER) continue;
+    const s = grid.settled[i];
+    if (s === 0) active++;
+    else if (s < SETTLE_THRESHOLD) settling++;
+    else dormant++;
+  }
+  if (frame % 10 === 0) console.log(`active:${active} settling:${settling} dormant:${dormant}`);
+
+
   // Advance a single frame.
   frame++;
 
@@ -2585,6 +2597,17 @@ canvas.addEventListener("mousemove", event => { updateMouse(event); });
 canvas.addEventListener("mouseenter", () => mouse.in = true);
 canvas.addEventListener("mouseleave", () => mouse.in = false);
 
+// Scroll-to-adjust brush size. Scroll down = bigger brush (reads as "zooming out"),
+// scroll up = smaller.
+canvas.addEventListener("wheel", event => {
+  event.preventDefault();
+  const slider = document.getElementById("brush");
+  const step = event.deltaY < 0 ? -1 : 1;
+  brushSize = Math.max(+slider.min, Math.min(+slider.max, brushSize + step));
+  slider.value = brushSize;
+  document.getElementById("bsz").textContent = brushSize;
+}, { passive: false });
+
 /**
  * Paints a brush stroke (circular splat of radius `brushSize`) of the given element at the given temperature
  * onto the canvas, OR E_EMPTY (clearing elements) if right clicked.
@@ -2694,39 +2717,105 @@ document.querySelectorAll("[data-scene]").forEach(b => {
 
 //endregion Misc
 
+//region Debug
+
+// Debug state
+const fpsEl = document.getElementById("fps");
+const activeEl = document.getElementById("active");
+const statsEl = document.getElementById("stats");
+let lastFpsTime = performance.now(), framesSince = 0, lastFps = 0;
+
+/**
+ * Updates the debug statistics (FPS, active cells, brush size etc)
+ */
+function updateDebugStats() {
+  framesSince++;
+  const now = performance.now();
+  if (now - lastFpsTime > 500) {
+    lastFps = (framesSince * 1000 / (now - lastFpsTime)) | 0;
+    fpsEl.textContent = lastFps;
+    framesSince = 0;
+    lastFpsTime = now;
+    let activeCells = 0;
+    for (let i = 0; i < GRID_SIZE; i++) if (grid.elements[i] !== E_EMPTY) activeCells++;
+    activeEl.textContent = activeCells;
+    statsEl.textContent = `cells: ${COLS}×${ROWS}=${GRID_SIZE}\nactive: ${activeCells}\nfps: ${lastFps}`;
+  }
+}
+
+//endregion Debug
+
 //#endregion === UI ===
 
 
 
+// =====================================================================
+//           Main Loop - TPS clamp and simulation
+// =====================================================================
+//#region === Main Loop ===
 
 
-//#region Main Loop
-// ---- main loop -------------------------------------------------------
-const fpsEl = document.getElementById("fps");
-const activeEl = document.getElementById("active");
-const statsEl = document.getElementById("stats");
-let lastFpsT = performance.now(), framesSince = 0, lastFps = 0;
+// Target sim ticks per second
+const TPS = 160
+const TICK_MS = 1000 / TPS;
 
-function loop() {
-  if (!paused) step();
-  render();
-  framesSince++;
+// Any frame longer than this (in ms) gets discarded instead of banked (anti discontinuity clamp)
+const MAX_FRAME_DT_MS = 250;
+
+// How much time (in ms) the sim is allowed to spend in ms before it must stop and render
+const FRAME_BUDGET_MS = 8;
+
+// Bucket for banked but not yet simulated real time. "How far behind real time has the sim fallen?"
+let accumulator = 0;
+
+// Timestamp of the previous frame
+let lastFrameTime = performance.now();
+
+/**
+ * Main loop that drives the game, and enforces our TPS clamp.
+ */
+function main() {
   const now = performance.now();
-  if (now - lastFpsT > 500) {
-    lastFps = (framesSince * 1000 / (now - lastFpsT)) | 0;
-    fpsEl.textContent = lastFps;
-    framesSince = 0;
-    lastFpsT = now;
-    let act = 0;
-    for (let i = 0; i < GRID_SIZE; i++) if (grid.elements[i] !== E_EMPTY) act++;
-    activeEl.textContent = act;
-    statsEl.textContent = `cells: ${COLS}×${ROWS}=${GRID_SIZE}\nactive: ${act}\nfps: ${lastFps}`;
+  let deltaTime = now - lastFrameTime;
+  lastFrameTime = now;
+
+  // If the gap between this frame and previous was bigger than our max frame delta, we just discard it, banking
+  // nothing
+  if (deltaTime > MAX_FRAME_DT_MS) {
+    deltaTime = 0;
   }
-  requestAnimationFrame(loop);
+
+  // Pour this frame's time into the elapsed bucket
+  accumulator += deltaTime;
+
+  // Keeps the simulation's clock matched to the real world clock. If accumulator is >= TICK_MS it means
+  // there's a a real time debt that's elapsed that still needs to be simulated by the world. As long as this is true,
+  // we step (if unpaused) and drain accumulator. The result is that the game runs at roughly our `TPS` regardless
+  // of monitor refresh rate. If at any point this process takes more time than our maximum `FRAME_BUDGET_MS`, we
+  // exit early.
+  while (accumulator >= TICK_MS && (performance.now() - now) < FRAME_BUDGET_MS) {
+    // If we aren't paused, do a single step.
+    if (!paused) step();
+    // Drain the accumulator for one TICK_MS unit, EVEN if paused.
+    accumulator -= TICK_MS;
+  }
+  // Clamps against the case where we keep falling behind frame after frame. Without this, accumulator could endlessly
+  // pile up. World runs briefly slow, but recovers when the load lets up because we forgive accumulator much like
+  // Jesus Christ forgave us. Otherwise, we just carry the honest remainder left in accumulator forward to the next
+  // frame.
+  if (accumulator > TICK_MS) accumulator = TICK_MS;
+
+  // Draw the current state, once per frame always regardless of how many ticks actually happened.
+  render();
+  updateDebugStats();
+  requestAnimationFrame(main);
+
+  // Paint elements if clickin
   if (mouse.btn) doPaint();
 }
 
-// seed a little pile so it's not empty on load (scales with grid size)
+
+// Seed a little pile so it's not empty on load (scales with grid size)
 (function seed() {
   R(60, 110, 90, 116, E_WOOD);   // wood log
   R(100, 90, 130, 100, E_SAND);  // sand pile
@@ -2734,8 +2823,8 @@ function loop() {
   R(30, 80, 35, 130, E_WALL);    // stone tower
 })();
 
-loop();
-//#endregion
+main();
+//#endregion === Main Loop ===
 
 </script>
 </body>
