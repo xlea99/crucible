@@ -288,6 +288,14 @@ function parseColor(value) {
 
   throw new Error(`Color string ${value}: color must be "rgb(r, g, b)" or "#rrggbb", got "${value}"`);
 }
+/**
+ * Clamps a byte's upper bound to 255.
+ * @param {number} n - byte [0..255] to clamp
+ * @return {number}
+ */
+function clampByte(n) {
+  return Math.max(0, Math.min(255, n | 0));
+}
 
 //endregion === Setup ===
 
@@ -382,38 +390,37 @@ const E_MOLD       = 20;
 //   3. Add a row here in the matching position
 // The startup validation will catch mismatches.
 const ELEMENT_DEFS = [
-  // baseColoration: '#hex' (flat) | function (per-spawn generator) | array of hex (random pick) | absent (shader paints)
-  // shader: per-frame function ref (declared in Render's Coloring subsection — must be `function` declarations for hoisting)
+
   {
     id: E_EMPTY, name: 'Eraser', kind: KIND_EMPTY,
-    baseColoration: '#080610', shader: shadeEmpty,
+    pigment: '#080610', shader: shadeEmpty,
     defaultTemp: 20,
   },
 
   {
     id: E_WALL, name: 'Wall', kind: KIND_STATIC,
-    baseColoration: '#78768C',
+    pigment: '#78768C',
     surfaceFriction: 50,
     defaultTemp: 20, thermalMass: 10,
   },
 
   {
     id: E_SAND, name: 'Sand', kind: KIND_POWDER,
-    baseColoration: baseSand,
+    pigment: pigmentSand,
     density: 4, surfaceFriction: 8,
     defaultTemp: 20,
   },
 
   {
     id: E_WATER, name: 'Water', kind: KIND_LIQUID,
-    baseColoration: '#447CDE', shader: shadeWater,
+    pigment: '#447CDE', shader: shadeWater,
     density: 2, spread: 6,
     defaultTemp: 20,
   },
 
   {
     id: E_WOOD, name: 'Wood', kind: KIND_STATIC,
-    baseColoration: '#6E4628',
+    pigment: '#6E4628',
     surfaceFriction: 150,
     defaultTemp: 20, ignitionChance: 0.012, burnTemp: 220,
   },
@@ -426,55 +433,55 @@ const ELEMENT_DEFS = [
 
   {
     id: E_LAVA, name: 'Lava', kind: KIND_LIQUID,
-    baseColoration: '#E6461E', shader: shadeLava, fx: FX_GLOW,
+    pigment: '#E6461E', shader: shadeLava, fx: FX_GLOW,
     density: 6, spread: 1,
     defaultTemp: 700
   },
 
   {
     id: E_STEAM, name: 'Steam', kind: KIND_GAS, lifetime: 600,
-    baseColoration: '#B4C8DC', shader: shadeFading,
+    pigment: '#B4C8DC', shader: shadeFading,
     defaultTemp: 130,
   },
 
   {
     id: E_ICE, name: 'Ice', kind: KIND_STATIC,
-    baseColoration: '#AAD2EB',
+    pigment: '#AAD2EB',
     surfaceFriction: 0,
     defaultTemp: -10, thermalMass: 24,
   },
 
   {
     id: E_STONE, name: 'Stone', kind: KIND_POWDER,
-    baseColoration: baseStone,
+    pigment: pigmentStone,
     density: 5, surfaceFriction: 850,
     defaultTemp: 30, thermalMass: 8,
   },
 
   {
     id: E_GLASS, name: 'Glass', kind: KIND_STATIC,
-    baseColoration: '#A0D2DC',
+    pigment: '#A0D2DC',
     surfaceFriction: 20,
     defaultTemp: 40, thermalMass: 10,
   },
 
   {
     id: E_PLANT, name: 'Plant', kind: KIND_STATIC,
-    baseColoration: '#50C864', shader: shadePlant,
+    pigment: '#50C864', shader: shadePlant,
     surfaceFriction: 300,
     defaultTemp: 20, ignitionChance: 0.02, burnTemp: 180,
   },
 
   {
     id: E_ACID, name: 'Acid', kind: KIND_LIQUID,
-    baseColoration: '#B4FF50',
+    pigment: '#B4FF50',
     density: 2, spread: 3,
     defaultTemp: 20,
   },
 
   {
     id: E_GUNPOWDER, name: 'Gunpowder', kind: KIND_POWDER,
-    baseColoration: baseGunpowder,
+    pigment: pigmentGunpowder,
     density: 4, surfaceFriction: 20,
     defaultTemp: 20,
     detonateAtTemp: 200,
@@ -482,13 +489,13 @@ const ELEMENT_DEFS = [
 
   {
     id: E_SMOKE, name: 'Smoke', kind: KIND_GAS, lifetime: 200,
-    baseColoration: '#3C3C48', shader: shadeFading,
+    pigment: '#3C3C48', shader: shadeFading,
     defaultTemp: 80,
   },
 
   {
     id: E_OIL, name: 'Oil', kind: KIND_LIQUID,
-    baseColoration: '#502850',
+    pigment: '#502850',
     density: 1, spread: 4,
     defaultTemp: 20, ignitionChance: 0.05, burnTemp: 130,
   },
@@ -501,7 +508,7 @@ const ELEMENT_DEFS = [
 
   {
     id: E_FUSE, name: 'Fuse', kind: KIND_STATIC,
-    baseColoration: '#B48C50', shader: shadeFuse, fx: FX_GLOW,
+    pigment: '#B48C50', shader: shadeFuse, fx: FX_GLOW,
     surfaceFriction: 50,
     defaultTemp: 20,
   },
@@ -514,7 +521,7 @@ const ELEMENT_DEFS = [
 
   {
     id: E_SALT, name: 'Salt', kind: KIND_POWDER,
-    baseColoration: baseSalt,
+    pigment: pigmentSalt,
     density: 4, surfaceFriction: 200,
     defaultTemp: 20,
   },
@@ -547,28 +554,28 @@ const M_THERMAL_MASS     = new Uint8Array(ELEMENT_COUNT);
 const M_SURFACE_FRICTION = new Uint16Array(ELEMENT_COUNT);
 
 // === Rendering metadata ===
-// Each element declares its appearance with two-three OPTIONAL refs: a baseColoration (a producer of one (r,g,b) tuple,
+// Each element declares its appearance with two-three OPTIONAL refs: a pigment (a producer of one (r,g,b) tuple,
 // consumed exactly once at spawn) and a shader (a per-frame function that may modify or overwrite the base).
 // Both/either is valid, neither is not (validation kicks that shit to the curb). On top of these, an element can
 // also declare that it uses one/multiple PostFX effects.
-const M_HAS_BASE         = new Uint8Array(ELEMENT_COUNT);     // 1 if element has baseColoration, 0 if shader-only (used for hot-loop branch)
-const M_BASE_COLORATION  = new Array(ELEMENT_COUNT);          // normalized generator function () => [r,g,b], or null if absent
+const M_HAS_PIGMENT         = new Uint8Array(ELEMENT_COUNT);     // 1 if element has pigment, 0 if shader-only (used for hot-loop branch)
+const M_PIGMENT_FACTORY  = new Array(ELEMENT_COUNT);          // normalized generator function () => [r,g,b], or null if absent
 const M_SHADER           = new Array(ELEMENT_COUNT);          // per-frame shader function (i, p, data) => void, or null if absent
 const M_PREVIEW_COLOR    = new Array(ELEMENT_COUNT);          // [r,g,b] for UI purposes
 const M_FX               = new Uint8Array(ELEMENT_COUNT);     // bitmask of FX_* this element uses in (0 = no PostFX involvement)
 
 /**
- * Normalizes any of the four BaseColoration spec forms into a single generator function shape.
+ * Normalizes any of the four pigment spec forms into a single generator function shape.
  * Called by the baker per element. Generator runs at SPAWN ONLY (consumed once into grid.color),
  * never per-frame. The four accepted forms:
  *   1. Flat hex string: '#B48C50' -> generator returns the same tuple every call
  *   2. Array of hex strings: ['#B48C50','#1E65C4','#6EC44D'] -> each spawn picks one uniformly at random
  *   3. Function: () => [r,g,b] -> arbitrary spawn logic (per-cell variation, whatever)
  *   4. Absent (undefined/null) -> returns null, element will be shader-only (and will look like E_EMPTY
- * @param {string|string[]|Function|null|undefined} form - any of the four BaseColoration spec forms
+ * @param {string|string[]|Function|null|undefined} form - any of the four pigment spec forms
  * @returns {Function|null} generator () => [r,g,b], or null if absent
  */
-function normalizeBaseColoration(form) {
+function normalizePigmentGenerator(form) {
   if (form === undefined || form === null) return null;
   if (typeof form === 'function') return form;
   if (typeof form === 'string') {
@@ -579,7 +586,7 @@ function normalizeBaseColoration(form) {
     const palette = form.map(parseColor);
     return () => palette[(Math.random() * palette.length) | 0];
   }
-  throw new Error(`Invalid baseColoration form: ${form}`);
+  throw new Error(`Invalid pigment form: ${form}`);
 }
 
 // List both allowed AND required keys (required subset of allowed obviously)
@@ -597,7 +604,7 @@ const META_KEYS = new Map([
   ['detonateAtTemp',  {required: false, store: M_DETONATE_AT_TEMP,  default: 0}],
   ['thermalMass',     {required: false, store: M_THERMAL_MASS,      default: 4}],
   ['surfaceFriction', {required: false, store: M_SURFACE_FRICTION,  default: 0}],
-  ['baseColoration',  {required: false, store: M_BASE_COLORATION,   default: null, transform: normalizeBaseColoration}],
+  ['pigment',         {required: false, store: M_PIGMENT_FACTORY,   default: null, transform: normalizePigmentGenerator}],
   ['shader',          {required: false, store: M_SHADER,            default: null}],
   ['previewColor',    {required: false,                             default: null}],   // consumed in the post-bake step below, no parallel-array store
   ['fx',              {required: false, store: M_FX,                default: 0}],
@@ -647,16 +654,16 @@ for (let i = 0; i < ELEMENT_COUNT; i++) {
   }
 }
 
-// Coloration post-bake. Derives the M_HAS_BASE flag + M_PREVIEW_COLOR tuple from the already-normalized M_BASE_COLORATION
-// generators. Runs once. Also enforces the "every element must have baseColoration OR shader" rule both is fine, one
+// Coloration post-bake. Derives the M_HAS_PIGMENT flag + M_PREVIEW_COLOR tuple from the already-normalized M_PIGMENT_FACTORY
+// generators. Runs once. Also enforces the "every element must have pigment OR shader" rule both is fine, one
 // is fine, neither is straight to Hague.
 for (let i = 0; i < ELEMENT_COUNT; i++) {
   const spec = ELEMENT_DEFS[i];
-  const generator = M_BASE_COLORATION[i];
-  M_HAS_BASE[i] = generator ? 1 : 0;
+  const generator = M_PIGMENT_FACTORY[i];
+  M_HAS_PIGMENT[i] = generator ? 1 : 0;
 
   if (!generator && !M_SHADER[i]) {
-    throw new Error(`Element '${spec.name}' has neither baseColoration nor shader! Must declare at least one!!`);
+    throw new Error(`Element '${spec.name}' has neither pigment nor shader! Must declare at least one!!`);
   }
 
   // Preview color for UI swatches. Priority: explicit previewColor -> run generator once -> gray fallback
@@ -701,11 +708,11 @@ const grid = {
   lifetimes : new Int16Array(GRID_SIZE),
   // Flags in each cell, used differently for different purposes by various elements
   flags: new Uint8Array(GRID_SIZE),
-  // Per-cell stored RGB base color. Written ONCE at spawn by applyBaseColoration (consuming
-  // the element's M_BASE_COLORATION generator), then read every frame by the renderer.
+  // Per-cell stored RGB base color. Written ONCE at spawn by applyPigment (consuming
+  // the element's M_PIGMENT_FACTORY generator), then read every frame by the renderer.
   // Travels with the cell on move/swap. Three separate Uint8Arrays for clean indexing — no
-  // packing math at read time. Shader-only elements (no baseColoration) leave these as 0;
-  // the renderer skips the write entirely for those via M_HAS_BASE[eid].
+  // packing math at read time. Shader-only elements (no pigment) leave these as 0;
+  // the renderer skips the write entirely for those via M_HAS_PIGMENT[eid].
   colorR : new Uint8Array(GRID_SIZE),
   colorG : new Uint8Array(GRID_SIZE),
   colorB : new Uint8Array(GRID_SIZE),
@@ -721,7 +728,7 @@ const grid = {
 for (let i = 0; i < GRID_SIZE; i++) grid.temps[i] = 20;
 
 // Initialize per-cell color arrays to E_EMPTY's base color. Typed arrays default to 0 which would render as pitch
-// black, when we want the proper background color baked from E_EMPTY's baseColoration
+// black, when we want the proper background color baked from E_EMPTY's pigment
 {
   const emptyC = M_PREVIEW_COLOR[E_EMPTY];
   grid.colorR.fill(emptyC[0]);
@@ -768,15 +775,15 @@ function cellInBounds(x, y) {
 // Grid CRUD
 
 /**
- * Helper runs the element's baseColoration generator (if any) and writes the resulting (r,g,b) tuple
+ * Helper runs the element's pigment generator (if any) and writes the resulting (r,g,b) tuple
  * into grid.colorR/G/B[i]. Called from setCell exactly once at spawn per cell. For shader-only elements
- * (no baseColoration), the renderer skips the base color write for those via M_HAS_BASE[eid] and the shader
+ * (no pigment), the renderer skips the base color write for those via M_HAS_PIGMENT[eid] and the shader
  * paints from scratch.
  * @param {number} i - flat grid index
  * @param {number} element - element ID being spawned
  */
-function applyBaseColoration(i, element) {
-  const gen = M_BASE_COLORATION[element];
+function applyPigment(i, element) {
+  const gen = M_PIGMENT_FACTORY[element];
   if (gen === null) return;
   const rgb = gen();
   grid.colorR[i] = rgb[0];
@@ -804,8 +811,8 @@ function setCell(i, element, temp) {
   // Remove flags for this cell.
   grid.flags[i] = 0;
 
-  // Generate the spawn-time base color (or no-op if element is shader-only).
-  applyBaseColoration(i, element);
+  // Generate the spawn-time pigment (or no-op if element is shader-only).
+  applyPigment(i, element);
 
   // A freshly-spawned cell starts un-settled, meaning it gets to slide diagonally on its first few
   // frames before friction commits it.
@@ -825,9 +832,9 @@ function clearCell(i, wakeNeighbors = true) {
   grid.elements[i] = E_EMPTY;
   grid.lifetimes[i] = 0;
   grid.flags[i] = 0;
-  // Apply E_EMPTY's baseColoration rather than zeroing — otherwise the cell renders pitch
+  // Apply E_EMPTY's pigment rather than zeroing — otherwise the cell renders pitch
   // black until something else paints over it (visible as a trail behind any falling sand).
-  applyBaseColoration(i, E_EMPTY);
+  applyPigment(i, E_EMPTY);
   grid.settled[i] = 0;
   // Keep temperature, air retains heat briefly TODO is this actually right? pending heat overhaul
 
@@ -1978,7 +1985,7 @@ function moveFlame(i, x, y) {
 
 
 // =====================================================================
-//           Rendering - View Modes, BaseColoration, Shaders, PostFX
+//           Rendering - View Modes, Pigment, Shaders, PostFX
 // =====================================================================
 //#region === Rendering ===
 
@@ -2053,9 +2060,9 @@ function render() {
 
 /**
  * Pixel pass: MAIN (color) mode. Three-step per cell - stored base, per-frame shader, then PostFX bookkeeping.
- *    1. If element has baseColoration, write grid.color[R/G/B][i] into pix[p..p+2]. BaseColoration is consistent
+ *    1. If element has pigment, write grid.color[R/G/B][i] into pix[p..p+2]. Pigment is consistent
  *    from the moment they're generated, they persist inside the cell.
- *    2. If element has a shader, dispatch. Shader either MODIFIES the just-written base, or OVERWRITES it
+ *    2. If element has a shader, dispatch. Shader either MODIFIES the just-written pigment, or OVERWRITES it
  *    from scratch (shader's call; no contract enforces either). Shader coloration is run every frame because it
  *    depends on live state of the grid.
  *    3. If element participates in any PostFX (M_FX[e] != 0), push its index onto fxList. This piggybacks on
@@ -2068,8 +2075,8 @@ function renderMainView() {
   for (let i = 0, p = 0; i < GRID_SIZE; i++, p += 4) {
     const e = grid.elements[i];
 
-    // Step 1: write stored baseColoration (skipped for shader-only elements like FIRE).
-    if (M_HAS_BASE[e]) {
+    // Step 1: write stored pigment (skipped for shader-only elements like FIRE).
+    if (M_HAS_PIGMENT[e]) {
       data[p]   = grid.colorR[i];
       data[p+1] = grid.colorG[i];
       data[p+2] = grid.colorB[i];
@@ -2152,9 +2159,9 @@ function renderHeatView() {
 
 
 // *********************************************************************
-//           Rendering - BaseColoration Generators
+//           Rendering - Pigments
 // *********************************************************************
-//region BaseColoration
+//region Pigment
 
 /**
  * Shared helper for elements that use a base color + per-grain pseudo-random tint. Produces a "speckled grain" look
@@ -2165,39 +2172,78 @@ function renderHeatView() {
  */
 function makeGrainyVariation(baseR, baseG, baseB) {
   const j = (Math.random() * 32) | 0;
-  return [baseR + j - 16, baseG + (j - 16) * 0.7, baseB + (j - 16) * 0.4];
+  return [
+    clampByte(baseR + j - 16),
+    clampByte(baseG + (j - 16) * 0.7),
+    clampByte(baseB + (j - 16) * 0.4)];
 }
 
 /**
- * BaseColoration for SAND: warm tan with per-grain noise variation.
+ * Pigment for SAND: warm tan with per-grain noise variation.
  * @returns {[number, number, number]} - (r, g, b) tuple in 0-255 range
  */
-function baseSand() {
-  return makeGrainyVariation(224, 193, 113);
+function pigmentSand() {
+  const r = Math.random();
+
+  let baseR, baseG, baseB;
+
+  // Dominant body sand: dry warm tan
+  if (r < 0.58) {
+    baseR = 222; baseG = 188; baseB = 118;
+  }
+  // Pale quartz / sun-bleached grains
+  else if (r < 0.78) {
+    baseR = 238; baseG = 216; baseB = 160;
+  }
+  // Golden-orange grains
+  else if (r < 0.90) {
+    baseR = 210; baseG = 158; baseB = 82;
+  }
+  // Duller brown grains for depth
+  else if (r < 0.985) {
+    baseR = 166; baseG = 126; baseB = 72;
+  }
+  // Rare dark mineral flecks
+  else {
+    baseR = 92; baseG = 78; baseB = 58;
+  }
+
+  // Brightness variation, deliberately small. Sand should shimmer by grain diversity,
+  // not look like every pixel rolled a white/black slider.
+  const brightness = randInt(17) - 8;
+
+  // Tiny hue wobble: separates "sand grains" from flat beige noise.
+  const warmth = randInt(7) - 3;
+
+  return [
+    clampByte(baseR + brightness + warmth),
+    clampByte(baseG + brightness),
+    clampByte(baseB + brightness - warmth)
+  ];
 }
 /**
- * BaseColoration for STONE: dark gray with per-grain noise variation.
+ * Pigment for STONE: dark gray with per-grain noise variation.
  * @returns {[number, number, number]} - (r, g, b) tuple in 0-255 range
  */
-function baseStone() {
+function pigmentStone() {
   return makeGrainyVariation(100,  90,  90);
 }
 /**
- * BaseColoration for GUNPOWDER: near-black with per-grain noise variation.
+ * Pigment for GUNPOWDER: near-black with per-grain noise variation.
  * @returns {[number, number, number]} - (r, g, b) tuple in 0-255 range
  */
-function baseGunpowder() {
+function pigmentGunpowder() {
   return makeGrainyVariation( 60,  60,  60);
 }
 /**
- * BaseColoration for SALT: near-white with per-grain noise variation.
+ * Pigment for SALT: near-white with per-grain noise variation.
  * @returns {[number, number, number]}- (r, g, b) tuple in 0-255 range
  */
-function baseSalt() {
+function pigmentSalt() {
   return makeGrainyVariation(230, 230, 235);
 }
 
-//endregion BaseColoration
+//endregion Pigment
 
 
 
@@ -2209,7 +2255,7 @@ function baseSalt() {
 
 /**
  * Shader for EMPTY: adds subtle warm/cool tint based on cell temperature so heat radiating through air is visible.
- * Modifies the base dim-gray background only when temp is unusual. Cells at ambient temp keep their plain baseColoration.
+ * Modifies the base dim-gray background only when temp is unusual. Cells at ambient temp keep their plain pigment.
  * @param {number} i - flat grid index of the cell being shaded
  * @param {number} p - pixel buffer byte offset (i * 4, pix is RGBA-packed)
  * @param {Uint8ClampedArray} data - the pix ImageData buffer; shader writes RGB channels into data[p..p+2]
