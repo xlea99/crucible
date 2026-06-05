@@ -365,24 +365,25 @@ const FX_GLOW = 1 << 0;   // additive 3x3 light dab around the cell (fire, lava,
 const E_EMPTY      = 0;
 const E_WALL       = 1;
 const E_SAND       = 2;
-const E_WATER      = 3;
-const E_WOOD       = 4;
-const E_FIRE       = 5;
-const E_LAVA       = 6;
-const E_STEAM      = 7;
-const E_ICE        = 8;
-const E_STONE      = 9;
-const E_GLASS      = 10;
-const E_PLANT      = 11;
-const E_ACID       = 12;
-const E_GUNPOWDER  = 13;
-const E_SMOKE      = 14;
-const E_OIL        = 15;
-const E_SPARK      = 16;
-const E_FUSE       = 17;
-const E_EMBER      = 18;
-const E_SALT       = 19;
-const E_MOLD       = 20;
+const E_WET_SAND   = 3;
+const E_WATER      = 4;
+const E_WOOD       = 5;
+const E_FIRE       = 6;
+const E_LAVA       = 7;
+const E_STEAM      = 8;
+const E_ICE        = 9;
+const E_STONE      = 10;
+const E_GLASS      = 11;
+const E_PLANT      = 12;
+const E_ACID       = 13;
+const E_GUNPOWDER  = 14;
+const E_SMOKE      = 15;
+const E_OIL        = 16;
+const E_SPARK      = 17;
+const E_FUSE       = 18;
+const E_EMBER      = 19;
+const E_SALT       = 20;
+const E_MOLD       = 21;
 
 // One row per element. Position MUST MATCH element ID. To add a new element:
 //   1. Add an `E_FLOUNDER` constant above (next sequential integer)
@@ -399,15 +400,22 @@ const ELEMENT_DEFS = [
 
   {
     id: E_WALL, name: 'Wall', kind: KIND_STATIC,
-    pigment: '#78768C',
+    pigment: '#78768C', shader: shadeWall,
     surfaceFriction: 50,
     defaultTemp: 20, thermalMass: 10,
   },
 
   {
     id: E_SAND, name: 'Sand', kind: KIND_POWDER,
-    pigment: pigmentSand,
+    pigment: pigmentSand, previewColor: '#C4AF87',
     density: 4, surfaceFriction: 8,
+    defaultTemp: 20,
+  },
+
+  {
+    id: E_WET_SAND, name: 'Wet Sand', kind: KIND_POWDER,
+    pigment: pigmentSand, previewColor: '#C4AF87',
+    density: 5, surfaceFriction: 200,
     defaultTemp: 20,
   },
 
@@ -934,6 +942,11 @@ function swapCells(i, j) {
   grid.colorG[j] = iColorG;
   grid.colorB[j] = iColorB;
 
+  // Support beneath the cells above i and j just changed, so invalidate their no-move cache, exactly as moveCell does
+  // for the cell above a vacated spot
+  if (i >= COLS) grid.settled[i - COLS] = 0;
+  if (j >= COLS) grid.settled[j - COLS] = 0;
+
   // Both cells have now moved this frame.
   grid.movedThisFrame[i] = 1;
   grid.movedThisFrame[j] = 1;
@@ -1306,6 +1319,7 @@ function tickSand(i, temp) {
   if (temp >= 700) {
     setCell(i, E_GLASS, 500);
   }
+  const dirs = [[0, -1], [0, 1], [-1, 0], [1, 0]];
 }
 /**
  * Melting to LAVA
@@ -1858,7 +1872,7 @@ function updateCellMovement(i, x, y) {
  * @param {number} y - y (row) coord
  */
 function movePowder(i, x, y) {
-  // Straight-down always allowed — gravity beats static friction. Destination's settled
+  // Straight-down always allowed, as gravity beats static friction. Destination's settled
   // counter was already reset by moveCell / swapCells / trySinkInto.
   if (tryMove(i, x, y + 1) || trySinkInto(i, x, y + 1)) return;
 
@@ -2083,19 +2097,23 @@ function renderMainView() {
     }
 
     // Step 2: per-frame shader dispatch
-    switch (e) {
-      case E_EMPTY:    shadeEmpty(i, p, data);  break;
-      case E_WATER:    shadeWater(i, p, data);  break;
-      case E_FIRE:     shadeFire(p, data);      break;
-      case E_LAVA:     shadeLava(i, p, data);   break;
-      case E_STEAM:    shadeFading(i, p, data); break;
-      case E_PLANT:    shadePlant(i, p, data);  break;
-      case E_SMOKE:    shadeFading(i, p, data); break;
-      case E_SPARK:    shadeSpark(p, data);     break;
-      case E_FUSE:     shadeFuse(i, p, data);   break;
-      case E_EMBER:    shadeEmber(p, data);     break;
-      case E_MOLD:     shadeMold(i, p, data);   break;
-    }
+    const shader = M_SHADER[e];
+    if (typeof shader === 'function') shader(i, p, data);
+    // ONLY INLINE if we prove the hit is severe for megamorphic dispatch
+    //switch (e) {
+    //  case E_EMPTY:    shadeEmpty(i, p, data);  break;
+    //  case E_WALL:     shadeWall(i, p, data);  break;
+    //  case E_WATER:    shadeWater(i, p, data);  break;
+    //  case E_FIRE:     shadeFire(i, p, data);      break;
+    //  case E_LAVA:     shadeLava(i, p, data);   break;
+    //  case E_STEAM:    shadeFading(i, p, data); break;
+    //  case E_PLANT:    shadePlant(i, p, data);  break;
+    //  case E_SMOKE:    shadeFading(i, p, data); break;
+    //  case E_SPARK:    shadeSpark(i, p, data);     break;
+    //  case E_FUSE:     shadeFuse(i, p, data);   break;
+    //  case E_EMBER:    shadeEmber(i, p, data);     break;
+    //  case E_MOLD:     shadeMold(i, p, data);   break;
+    //}
 
     // Step 3: PostFX bookkeeping. If this element participates in any post-processing
     // effect, record its index now while we already have it cached. renderPostFXPass
@@ -2159,7 +2177,7 @@ function renderHeatView() {
 
 
 // *********************************************************************
-//           Rendering - Pigments
+//           Rendering - Pigment
 // *********************************************************************
 //region Pigment
 
@@ -2179,48 +2197,26 @@ function makeGrainyVariation(baseR, baseG, baseB) {
 }
 
 /**
- * Pigment for SAND: warm tan with per-grain noise variation.
+ * Pigment for SAND: soft tan with flecks of different materials
  * @returns {[number, number, number]} - (r, g, b) tuple in 0-255 range
  */
 function pigmentSand() {
-  const r = Math.random();
-
-  let baseR, baseG, baseB;
-
-  // Dominant body sand: dry warm tan
-  if (r < 0.58) {
-    baseR = 222; baseG = 188; baseB = 118;
-  }
-  // Pale quartz / sun-bleached grains
-  else if (r < 0.78) {
-    baseR = 238; baseG = 216; baseB = 160;
-  }
-  // Golden-orange grains
-  else if (r < 0.90) {
-    baseR = 210; baseG = 158; baseB = 82;
-  }
-  // Duller brown grains for depth
-  else if (r < 0.985) {
-    baseR = 166; baseG = 126; baseB = 72;
-  }
-  // Rare dark mineral flecks
-  else {
-    baseR = 92; baseG = 78; baseB = 58;
-  }
-
-  // Brightness variation, deliberately small. Sand should shimmer by grain diversity,
-  // not look like every pixel rolled a white/black slider.
-  const brightness = randInt(17) - 8;
-
-  // Tiny hue wobble: separates "sand grains" from flat beige noise.
-  const warmth = randInt(7) - 3;
-
-  return [
-    clampByte(baseR + brightness + warmth),
-    clampByte(baseG + brightness),
-    clampByte(baseB + brightness - warmth)
+  const SAND_GRAINS = [
+    [196, 175, 135, 0.560],  // soft tan
+    [201, 188, 160, 0.660],  // pale quartz
+    [206, 200, 179, 0.890],  // bright fleck
+    [183, 153, 109, 0.970],  // dark tan
+    [168, 136,  90, 1.000],  // dark mineral
   ];
+  const r = Math.random();
+  let g = SAND_GRAINS[SAND_GRAINS.length - 1];
+  for (let k = 0; k < SAND_GRAINS.length; k++) {
+    if (r < SAND_GRAINS[k][3]) { g = SAND_GRAINS[k]; break; }
+  }
+  const j = (Math.random() * 2 - 1) * 13;
+  return [clampByte(g[0] + j), clampByte(g[1] + j * 0.8), clampByte(g[2] + j * 0.5)];
 }
+
 /**
  * Pigment for STONE: dark gray with per-grain noise variation.
  * @returns {[number, number, number]} - (r, g, b) tuple in 0-255 range
@@ -2298,10 +2294,11 @@ function shadeWater(i, p, data) {
 }
 /**
  * Shader for FIRE: per-frame random orange/red flicker. Pure overwrite (no base).
+ * @param {number} i - (unused) flat grid index of the cell being shaded
  * @param {number} p - pixel buffer byte offset (i * 4, pix is RGBA-packed)
  * @param {Uint8ClampedArray} data - the pix ImageData buffer; shader writes RGB channels into data[p..p+2]
  */
-function shadeFire(p, data) {
+function shadeFire(i, p, data) {
   const k = (Math.random() * 60) | 0;
   data[p]   = Math.min(255, 200 + k);
   data[p+1] = 80 + ((Math.random() * 100) | 0);
@@ -2346,10 +2343,11 @@ function shadePlant(i, p, data) {
 }
 /**
  * Shader for SPARK: per-frame random bright yellow flicker. Pure overwrite (no base)
+ * @param {number} i - flat grid index of the cell being shaded
  * @param {number} p - pixel buffer byte offset (i * 4, pix is RGBA-packed)
  * @param {Uint8ClampedArray} data - the pix ImageData buffer; shader writes RGB channels into data[p..p+2]
  */
-function shadeSpark(p, data) {
+function shadeSpark(i, p, data) {
   const k = (Math.random() * 60) | 0;
   data[p]   = 255;
   data[p+1] = 220 + k - 30;
@@ -2371,10 +2369,11 @@ function shadeFuse(i, p, data) {
 }
 /**
  * Shader for EMBER: per-frame random warm orange flicker. Pure overwrite (no base).
+ * @param {number} i - flat grid index of the cell being shaded
  * @param {number} p - pixel buffer byte offset (i * 4, pix is RGBA-packed)
  * @param {Uint8ClampedArray} data - the pix ImageData buffer; shader writes RGB channels into data[p..p+2]
  */
-function shadeEmber(p, data) {
+function shadeEmber(i, p, data) {
   const k = (Math.random() * 40) | 0;
   data[p]   = 255;
   data[p+1] = 150 + k;
@@ -2391,6 +2390,27 @@ function shadeMold(i, p, data) {
   data[p]   = 90 + k;
   data[p+1] = 130 + (k >> 1);
   data[p+2] = 70 + (k >> 2);
+}
+/**
+ * Shader for WALL: embossed outline around its edges.
+ * @param {number} i - flat grid index of the cell being shaded
+ * @param {number} p - pixel buffer byte offset (i * 4, pix is RGBA-packed)
+ * @param {Uint8ClampedArray} data - the pix ImageData buffer; shader writes RGB channels into data[p..p+2]
+ */
+function shadeWall(i, p, data) {
+  const x = cellX(i), y = cellY(i);
+  let adjust = 0;
+  for (let dy = -1; dy <= 1; dy++) {
+    for (let dx = -1; dx <= 1; dx++) {
+      if (dx === 0 && dy === 0) continue;          // skip self
+      const nx = x + dx, ny = y + dy;
+      if (!cellInBounds(nx, ny)) continue;          // don't wrap or read OOB
+      if (grid.elements[cellIndex(nx, ny)] === E_EMPTY) adjust += 10;
+    }
+  }
+  data[p]   += adjust;
+  data[p+1] += adjust;
+  data[p+2] += adjust;
 }
 
 //endregion Shaders
@@ -2666,7 +2686,10 @@ function doPaint() {
       if (dx*dx + dy*dy > r*r) continue;
       const x = mouse.gx + dx, y = mouse.gy + dy;
       if (!cellInBounds(x, y)) continue;
-      setCell(cellIndex(x, y), e, M_DEFAULT_TEMP[e]);
+      // Skip occupied cells
+      if (grid.elements[cellIndex(x,y)] === E_EMPTY || e === E_EMPTY) {
+        setCell(cellIndex(x, y), e, M_DEFAULT_TEMP[e]);
+      }
     }
   }
 }
