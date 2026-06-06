@@ -394,102 +394,102 @@ const ELEMENT_DEFS = [
 
   {
     id: E_EMPTY, name: 'Eraser', kind: KIND_EMPTY,
-    pigment: '#080610', shader: shadeEmpty,
+    dye: '#080610', tint: tintEmpty,
     defaultTemp: 20,
   },
 
   {
     id: E_WALL, name: 'Wall', kind: KIND_STATIC,
-    pigment: '#78768C', shader: shadeWall,
+    dye: '#78768C', tint: tintWall,
     surfaceFriction: 50,
     defaultTemp: 20, thermalMass: 10,
   },
 
   {
     id: E_SAND, name: 'Sand', kind: KIND_POWDER,
-    pigment: pigmentSand, previewColor: '#C4AF87',
+    dye: dyeSand, previewColor: '#C4AF87',
     density: 4, surfaceFriction: 8,
     defaultTemp: 20,
   },
 
   {
     id: E_WET_SAND, name: 'Wet Sand', kind: KIND_POWDER,
-    pigment: pigmentSand, previewColor: '#C4AF87',
+    dye: dyeSand, previewColor: '#C4AF87',
     density: 5, surfaceFriction: 200,
     defaultTemp: 20,
   },
 
   {
     id: E_WATER, name: 'Water', kind: KIND_LIQUID,
-    pigment: '#447CDE', shader: shadeWater,
+    dye: '#447CDE', tint: tintWater,
     density: 2, spread: 6,
     defaultTemp: 20,
   },
 
   {
     id: E_WOOD, name: 'Wood', kind: KIND_STATIC,
-    pigment: '#6E4628',
+    dye: '#6E4628',
     surfaceFriction: 150,
     defaultTemp: 20, ignitionChance: 0.012, burnTemp: 220,
   },
 
   {
     id: E_FIRE, name: 'Fire', kind: KIND_GAS, movement: MOVE_FLAME, lifetime: 60,
-    shader: shadeFire, previewColor: '#E76F0A', fx: FX_GLOW,
+    tint: tintFire, previewColor: '#E76F0A', fx: FX_GLOW,
     defaultTemp: 540,
   },
 
   {
     id: E_LAVA, name: 'Lava', kind: KIND_LIQUID,
-    pigment: '#E6461E', shader: shadeLava, fx: FX_GLOW,
+    dye: '#E6461E', tint: tintLava, fx: FX_GLOW,
     density: 6, spread: 1,
     defaultTemp: 700
   },
 
   {
     id: E_STEAM, name: 'Steam', kind: KIND_GAS, lifetime: 600,
-    pigment: '#B4C8DC', shader: shadeFading,
+    dye: '#B4C8DC', tint: tintFading,
     defaultTemp: 130,
   },
 
   {
     id: E_ICE, name: 'Ice', kind: KIND_STATIC,
-    pigment: '#AAD2EB',
+    dye: '#AAD2EB',
     surfaceFriction: 0,
     defaultTemp: -10, thermalMass: 24,
   },
 
   {
     id: E_BASALT, name: 'Basalt', kind: KIND_POWDER,
-    pigment: pigmentBasalt, previewColor: '#736969',
+    dye: dyeBasalt, previewColor: '#736969',
     density: 5, surfaceFriction: 850,
     defaultTemp: 30, thermalMass: 8,
   },
 
   {
     id: E_GLASS, name: 'Glass', kind: KIND_STATIC,
-    pigment: '#A0D2DC',
+    dye: '#A0D2DC',
     surfaceFriction: 20,
     defaultTemp: 40, thermalMass: 10,
   },
 
   {
     id: E_PLANT, name: 'Plant', kind: KIND_STATIC,
-    pigment: '#50C864', shader: shadePlant,
+    dye: '#50C864', tint: tintPlant,
     surfaceFriction: 300,
     defaultTemp: 20, ignitionChance: 0.02, burnTemp: 180,
   },
 
   {
     id: E_ACID, name: 'Acid', kind: KIND_LIQUID,
-    pigment: '#B4FF50',
+    dye: '#B4FF50',
     density: 2, spread: 3,
     defaultTemp: 20,
   },
 
   {
     id: E_GUNPOWDER, name: 'Gunpowder', kind: KIND_POWDER,
-    pigment: pigmentGunpowder,
+    dye: dyeGunpowder,
     density: 4, surfaceFriction: 20,
     defaultTemp: 20,
     detonateAtTemp: 200,
@@ -497,46 +497,46 @@ const ELEMENT_DEFS = [
 
   {
     id: E_SMOKE, name: 'Smoke', kind: KIND_GAS, lifetime: 200,
-    pigment: '#3C3C48', shader: shadeFading,
+    dye: '#3C3C48', tint: tintFading,
     defaultTemp: 80,
   },
 
   {
     id: E_OIL, name: 'Oil', kind: KIND_LIQUID,
-    pigment: '#502850',
+    dye: '#502850',
     density: 1, spread: 4,
     defaultTemp: 20, ignitionChance: 0.05, burnTemp: 130,
   },
 
   {
     id: E_SPARK, name: 'Spark', kind: KIND_GAS, movement: MOVE_FLAME, lifetime: 8,
-    shader: shadeSpark, previewColor: '#FFDC64', fx: FX_GLOW,
+    tint: tintSpark, previewColor: '#FFDC64', fx: FX_GLOW,
     defaultTemp: 600
   },
 
   {
     id: E_FUSE, name: 'Fuse', kind: KIND_STATIC,
-    pigment: '#B48C50', shader: shadeFuse, fx: FX_GLOW,
+    dye: '#B48C50', tint: tintFuse, fx: FX_GLOW,
     surfaceFriction: 50,
     defaultTemp: 20,
   },
 
   {
     id: E_EMBER, name: 'Ember', kind: KIND_GAS, lifetime: 24,
-    shader: shadeEmber, fx: FX_GLOW,
+    tint: tintEmber, fx: FX_GLOW,
     defaultTemp: 400
   },
 
   {
     id: E_SALT, name: 'Salt', kind: KIND_POWDER,
-    pigment: pigmentSalt,
+    dye: dyeSalt,
     density: 4, surfaceFriction: 200,
     defaultTemp: 20,
   },
 
   {
     id: E_MOLD, name: 'Mold', kind: KIND_STATIC,
-    shader: shadeMold, previewColor: '#5A8246',
+    tint: tintMold, previewColor: '#5A8246',
     surfaceFriction: 100,
     defaultTemp: 20,
   },
@@ -562,28 +562,29 @@ const M_THERMAL_MASS     = new Uint8Array(ELEMENT_COUNT);
 const M_SURFACE_FRICTION = new Uint16Array(ELEMENT_COUNT);
 
 // === Rendering metadata ===
-// Each element declares its appearance with two-three OPTIONAL refs: a pigment (a producer of one (r,g,b) tuple,
-// consumed exactly once at spawn) and a shader (a per-frame function that may modify or overwrite the base).
+// Each element declares its appearance via the PIGMENT system, which has two stages, both OPTIONAL:
+//   - dye:  a producer of one (r,g,b) tuple, consumed exactly once at spawn (the cell's permanent identity color)
+//   - tint: a per-frame function that may modify or overwrite the dye (live overlay - flicker, depth shading, etc)
 // Both/either is valid, neither is not (validation kicks that shit to the curb). On top of these, an element can
 // also declare that it uses one/multiple PostFX effects.
-const M_HAS_PIGMENT         = new Uint8Array(ELEMENT_COUNT);     // 1 if element has pigment, 0 if shader-only (used for hot-loop branch)
-const M_PIGMENT_FACTORY  = new Array(ELEMENT_COUNT);          // normalized generator function () => [r,g,b], or null if absent
-const M_SHADER           = new Array(ELEMENT_COUNT);          // per-frame shader function (i, p, data) => void, or null if absent
+const M_HAS_DYE          = new Uint8Array(ELEMENT_COUNT);     // 1 if element has a dye, 0 if tint-only (used for hot-loop branch)
+const M_DYE_FACTORY      = new Array(ELEMENT_COUNT);          // normalized generator function () => [r,g,b], or null if absent
+const M_TINT             = new Array(ELEMENT_COUNT);          // per-frame tint function (i, p, data) => void, or null if absent
 const M_PREVIEW_COLOR    = new Array(ELEMENT_COUNT);          // [r,g,b] for UI purposes
 const M_FX               = new Uint8Array(ELEMENT_COUNT);     // bitmask of FX_* this element uses in (0 = no PostFX involvement)
 
 /**
- * Normalizes any of the four pigment spec forms into a single generator function shape.
+ * Normalizes any of the four dye spec forms into a single generator function shape.
  * Called by the baker per element. Generator runs at SPAWN ONLY (consumed once into grid.color),
  * never per-frame. The four accepted forms:
  *   1. Flat hex string: '#B48C50' -> generator returns the same tuple every call
  *   2. Array of hex strings: ['#B48C50','#1E65C4','#6EC44D'] -> each spawn picks one uniformly at random
  *   3. Function: () => [r,g,b] -> arbitrary spawn logic (per-cell variation, whatever)
- *   4. Absent (undefined/null) -> returns null, element will be shader-only (and will look like E_EMPTY
- * @param {string|string[]|Function|null|undefined} form - any of the four pigment spec forms
+ *   4. Absent (undefined/null) -> returns null, element will be tint-only (and will look like E_EMPTY
+ * @param {string|string[]|Function|null|undefined} form - any of the four dye spec forms
  * @returns {Function|null} generator () => [r,g,b], or null if absent
  */
-function normalizePigmentGenerator(form) {
+function normalizeDyeGenerator(form) {
   if (form === undefined || form === null) return null;
   if (typeof form === 'function') return form;
   if (typeof form === 'string') {
@@ -594,7 +595,7 @@ function normalizePigmentGenerator(form) {
     const palette = form.map(parseColor);
     return () => palette[(Math.random() * palette.length) | 0];
   }
-  throw new Error(`Invalid pigment form: ${form}`);
+  throw new Error(`Invalid dye form: ${form}`);
 }
 
 // List both allowed AND required keys (required subset of allowed obviously)
@@ -612,8 +613,8 @@ const META_KEYS = new Map([
   ['detonateAtTemp',  {required: false, store: M_DETONATE_AT_TEMP,  default: 0}],
   ['thermalMass',     {required: false, store: M_THERMAL_MASS,      default: 4}],
   ['surfaceFriction', {required: false, store: M_SURFACE_FRICTION,  default: 0}],
-  ['pigment',         {required: false, store: M_PIGMENT_FACTORY,   default: null, transform: normalizePigmentGenerator}],
-  ['shader',          {required: false, store: M_SHADER,            default: null}],
+  ['dye',             {required: false, store: M_DYE_FACTORY,       default: null, transform: normalizeDyeGenerator}],
+  ['tint',            {required: false, store: M_TINT,              default: null}],
   ['previewColor',    {required: false,                             default: null}],   // consumed in the post-bake step below, no parallel-array store
   ['fx',              {required: false, store: M_FX,                default: 0}],
 ]);
@@ -662,16 +663,16 @@ for (let i = 0; i < ELEMENT_COUNT; i++) {
   }
 }
 
-// Coloration post-bake. Derives the M_HAS_PIGMENT flag + M_PREVIEW_COLOR tuple from the already-normalized M_PIGMENT_FACTORY
-// generators. Runs once. Also enforces the "every element must have pigment OR shader" rule both is fine, one
-// is fine, neither is straight to Hague.
+// Pigment post-bake. Derives the M_HAS_DYE flag + M_PREVIEW_COLOR tuple from the already-normalized M_DYE_FACTORY
+// generators. Runs once. Also enforces the "every element must have dye OR tint" rule - both is fine, one is fine,
+// neither is straight to Hague.
 for (let i = 0; i < ELEMENT_COUNT; i++) {
   const spec = ELEMENT_DEFS[i];
-  const generator = M_PIGMENT_FACTORY[i];
-  M_HAS_PIGMENT[i] = generator ? 1 : 0;
+  const generator = M_DYE_FACTORY[i];
+  M_HAS_DYE[i] = generator ? 1 : 0;
 
-  if (!generator && !M_SHADER[i]) {
-    throw new Error(`Element '${spec.name}' has neither pigment nor shader! Must declare at least one!!`);
+  if (!generator && !M_TINT[i]) {
+    throw new Error(`Element '${spec.name}' has neither dye nor tint! Must declare at least one!!`);
   }
 
   // Preview color for UI swatches. Priority: explicit previewColor -> run generator once -> gray fallback
@@ -716,11 +717,11 @@ const grid = {
   lifetimes : new Int16Array(GRID_SIZE),
   // Flags in each cell, used differently for different purposes by various elements
   flags: new Uint8Array(GRID_SIZE),
-  // Per-cell stored RGB base color. Written ONCE at spawn by applyPigment (consuming
-  // the element's M_PIGMENT_FACTORY generator), then read every frame by the renderer.
+  // Per-cell stored RGB dye. Written ONCE at spawn by applyDye (consuming
+  // the element's M_DYE_FACTORY generator), then read every frame by the renderer.
   // Travels with the cell on move/swap. Three separate Uint8Arrays for clean indexing — no
-  // packing math at read time. Shader-only elements (no pigment) leave these as 0;
-  // the renderer skips the write entirely for those via M_HAS_PIGMENT[eid].
+  // packing math at read time. Tint-only elements (no dye) leave these as 0;
+  // the renderer skips the write entirely for those via M_HAS_DYE[eid].
   colorR : new Uint8Array(GRID_SIZE),
   colorG : new Uint8Array(GRID_SIZE),
   colorB : new Uint8Array(GRID_SIZE),
@@ -736,7 +737,7 @@ const grid = {
 for (let i = 0; i < GRID_SIZE; i++) grid.temps[i] = 20;
 
 // Initialize per-cell color arrays to E_EMPTY's base color. Typed arrays default to 0 which would render as pitch
-// black, when we want the proper background color baked from E_EMPTY's pigment
+// black, when we want the proper background color baked from E_EMPTY's dye
 {
   const emptyC = M_PREVIEW_COLOR[E_EMPTY];
   grid.colorR.fill(emptyC[0]);
@@ -783,15 +784,15 @@ function cellInBounds(x, y) {
 // Grid CRUD
 
 /**
- * Helper runs the element's pigment generator (if any) and writes the resulting (r,g,b) tuple
- * into grid.colorR/G/B[i]. Called from setCell exactly once at spawn per cell. For shader-only elements
- * (no pigment), the renderer skips the base color write for those via M_HAS_PIGMENT[eid] and the shader
+ * Helper runs the element's dye generator (if any) and writes the resulting (r,g,b) tuple
+ * into grid.colorR/G/B[i]. Called from setCell exactly once at spawn per cell. For tint-only elements
+ * (no dye), the renderer skips the base color write for those via M_HAS_DYE[eid] and the tint
  * paints from scratch.
  * @param {number} i - flat grid index
  * @param {number} element - element ID being spawned
  */
-function applyPigment(i, element) {
-  const gen = M_PIGMENT_FACTORY[element];
+function applyDye(i, element) {
+  const gen = M_DYE_FACTORY[element];
   if (gen === null) return;
   const rgb = gen(i);
   grid.colorR[i] = rgb[0];
@@ -819,8 +820,8 @@ function setCell(i, element, temp) {
   // Remove flags for this cell.
   grid.flags[i] = 0;
 
-  // Generate the spawn-time pigment (or no-op if element is shader-only).
-  applyPigment(i, element);
+  // Generate the spawn-time dye (or no-op if element is tint-only).
+  applyDye(i, element);
 
   // A freshly-spawned cell starts un-settled, meaning it gets to slide diagonally on its first few
   // frames before friction commits it.
@@ -840,9 +841,9 @@ function clearCell(i, wakeNeighbors = true) {
   grid.elements[i] = E_EMPTY;
   grid.lifetimes[i] = 0;
   grid.flags[i] = 0;
-  // Apply E_EMPTY's pigment rather than zeroing — otherwise the cell renders pitch
+  // Apply E_EMPTY's dye rather than zeroing — otherwise the cell renders pitch
   // black until something else paints over it (visible as a trail behind any falling sand).
-  applyPigment(i, E_EMPTY);
+  applyDye(i, E_EMPTY);
   grid.settled[i] = 0;
   // Keep temperature, air retains heat briefly TODO is this actually right? pending heat overhaul
 
@@ -1999,7 +2000,7 @@ function moveFlame(i, x, y) {
 
 
 // =====================================================================
-//           Rendering - View Modes, Pigment, Shaders, PostFX
+//           Rendering - View Modes, Dye, Tint, PostFX
 // =====================================================================
 //#region === Rendering ===
 
@@ -2073,12 +2074,12 @@ function render() {
 
 
 /**
- * Pixel pass: MAIN (color) mode. Three-step per cell - stored base, per-frame shader, then PostFX bookkeeping.
- *    1. If element has pigment, write grid.color[R/G/B][i] into pix[p..p+2]. Pigment is consistent
- *    from the moment they're generated, they persist inside the cell.
- *    2. If element has a shader, dispatch. Shader either MODIFIES the just-written pigment, or OVERWRITES it
- *    from scratch (shader's call; no contract enforces either). Shader coloration is run every frame because it
- *    depends on live state of the grid.
+ * Pixel pass: MAIN (color) mode. Three-step per cell - stored dye, per-frame tint, then PostFX bookkeeping.
+ *    1. If element has a dye, write grid.color[R/G/B][i] into pix[p..p+2]. Dyes are baked at spawn time
+ *    and persist inside the cell - just a stored RGB read here.
+ *    2. If element has a tint, dispatch. Tint either MODIFIES the just-written dye, or OVERWRITES it
+ *    from scratch (tint's call; no contract enforces either). Tints run every frame because they
+ *    depend on live state of the grid.
  *    3. If element participates in any PostFX (M_FX[e] != 0), push its index onto fxList. This piggybacks on
  *    the scan we have to do anyway, so the cost is one branch + one write per cell - effectively free. The list
  *    is consumed by renderPostFXPass after this function returns.
@@ -2089,18 +2090,18 @@ function renderMainView() {
   for (let i = 0, p = 0; i < GRID_SIZE; i++, p += 4) {
     const e = grid.elements[i];
 
-    // Step 1: write stored pigment (skipped for shader-only elements like FIRE).
-    if (M_HAS_PIGMENT[e]) {
+    // Step 1: write stored dye (skipped for tint-only elements like FIRE).
+    if (M_HAS_DYE[e]) {
       data[p]   = grid.colorR[i];
       data[p+1] = grid.colorG[i];
       data[p+2] = grid.colorB[i];
     }
 
-    // Step 2: per-frame shader dispatch. High perf shaders get inlined, everything else is automatically dispatched
+    // Step 2: per-frame tint dispatch. High perf tints get inlined, everything else is automatically dispatched
     switch (e) {
-      case E_FIRE:     shadeFire(i, p, data);      break;
+      case E_FIRE:     tintFire(i, p, data);      break;
       default: {
-        const s = M_SHADER[e];
+        const s = M_TINT[e];
         if (s) s(i, p, data);
       }
     }
@@ -2167,9 +2168,9 @@ function renderHeatView() {
 
 
 // *********************************************************************
-//           Rendering - Pigment
+//           Rendering - Dyes
 // *********************************************************************
-//region Pigment
+//region Dyes
 
 function desaturate(r, g, b, amount = 0.06) {
   // perceptual-ish luminance, better than plain average
@@ -2216,10 +2217,10 @@ function makeGrainyVariation(baseR, baseG, baseB) {
 }
 
 /**
- * Pigment for SAND: soft tan with flecks of different materials
+ * Dye for SAND: soft tan with flecks of different materials
  * @returns {[number, number, number]} - (r, g, b) tuple in 0-255 range
  */
-function pigmentSand() {
+function dyeSand() {
   const SAND_GRAINS = [
     [196, 175, 135, 0.560],  // soft tan
     [201, 188, 160, 0.660],  // pale quartz
@@ -2264,10 +2265,10 @@ function _basaltHexHash(idx, idy) {
   return ((n ^ (n >>> 16)) >>> 0) / 4294967295;
 }
 /**
- * Pigment for BASALT: dark volcanic grain + baked-in hexagonal columns.
+ * Dye for BASALT: dark volcanic grain + baked-in hexagonal columns.
  * Columns read as a wall when intact; shatter into dark rubble once cells move.
  */
-function pigmentBasalt(i) {
+function dyeBasalt(i) {
   const x = i % COLS, y = (i / COLS) | 0;
 
   // --- geometric layer (position-based, bakes at spawn) ---
@@ -2310,38 +2311,38 @@ function pigmentBasalt(i) {
 
 
 /**
- * Pigment for GUNPOWDER: near-black with per-grain noise variation.
+ * Dye for GUNPOWDER: near-black with per-grain noise variation.
  * @returns {[number, number, number]} - (r, g, b) tuple in 0-255 range
  */
-function pigmentGunpowder() {
+function dyeGunpowder() {
   return makeGrainyVariation( 60,  60,  60);
 }
 /**
- * Pigment for SALT: near-white with per-grain noise variation.
+ * Dye for SALT: near-white with per-grain noise variation.
  * @returns {[number, number, number]}- (r, g, b) tuple in 0-255 range
  */
-function pigmentSalt() {
+function dyeSalt() {
   return makeGrainyVariation(230, 230, 235);
 }
 
-//endregion Pigment
+//endregion Dyes
 
 
 
 
 // *********************************************************************
-//           Rendering - Shaders
+//           Rendering - Tints
 // *********************************************************************
-//region Shaders
+//region Tints
 
 /**
- * Shader for EMPTY: adds subtle warm/cool tint based on cell temperature so heat radiating through air is visible.
- * Modifies the base dim-gray background only when temp is unusual. Cells at ambient temp keep their plain pigment.
- * @param {number} i - flat grid index of the cell being shaded
+ * Tint for EMPTY: adds subtle warm/cool tint based on cell temperature so heat radiating through air is visible.
+ * Modifies the base dim-gray background only when temp is unusual. Cells at ambient temp keep their plain dye.
+ * @param {number} i - flat grid index of the cell being tinted
  * @param {number} p - pixel buffer byte offset (i * 4, pix is RGBA-packed)
- * @param {Uint8ClampedArray} data - the pix ImageData buffer; shader writes RGB channels into data[p..p+2]
+ * @param {Uint8ClampedArray} data - the pix ImageData buffer; tint writes RGB channels into data[p..p+2]
  */
-function shadeEmpty(i, p, data) {
+function tintEmpty(i, p, data) {
   const t = grid.temps[i];
   if (t > 60) {
     const k = Math.min(1, (t - 60) / 600);
@@ -2356,13 +2357,13 @@ function shadeEmpty(i, p, data) {
   }
 }
 /**
- * Shader for WATER: depth-aware cyan-blue gradient. Overwrites the flat base, counts up to 6 cells of water above
+ * Tint for WATER: depth-aware cyan-blue gradient. Overwrites the flat base, counts up to 6 cells of water above
  * to compute depth, surface = light, deep = dark
- * @param {number} i - flat grid index of the cell being shaded
+ * @param {number} i - flat grid index of the cell being tinted
  * @param {number} p - pixel buffer byte offset (i * 4, pix is RGBA-packed)
- * @param {Uint8ClampedArray} data - the pix ImageData buffer; shader writes RGB channels into data[p..p+2]
+ * @param {Uint8ClampedArray} data - the pix ImageData buffer; tint writes RGB channels into data[p..p+2]
  */
-function shadeWater(i, p, data) {
+function tintWater(i, p, data) {
   let depth = 0;
   let k = i;
   for (let d = 0; d < 6; d++) {
@@ -2378,74 +2379,74 @@ function shadeWater(i, p, data) {
   data[p+2] = 230 - t01 *  50 + noise;     // 230 → 180
 }
 /**
- * Shader for FIRE: per-frame random orange/red flicker. Pure overwrite (no base).
- * @param {number} i - (unused) flat grid index of the cell being shaded
+ * Tint for FIRE: per-frame random orange/red flicker. Pure overwrite (no base).
+ * @param {number} i - (unused) flat grid index of the cell being tinted
  * @param {number} p - pixel buffer byte offset (i * 4, pix is RGBA-packed)
- * @param {Uint8ClampedArray} data - the pix ImageData buffer; shader writes RGB channels into data[p..p+2]
+ * @param {Uint8ClampedArray} data - the pix ImageData buffer; tint writes RGB channels into data[p..p+2]
  */
-function shadeFire(i, p, data) {
+function tintFire(i, p, data) {
   const k = (Math.random() * 60) | 0;
   data[p]   = Math.min(255, 200 + k);
   data[p+1] = 80 + ((Math.random() * 100) | 0);
   data[p+2] = 20 + ((Math.random() * 40) | 0);
 }
 /**
- * Shader for LAVA: animated `frame`-driven noise. Modifies the stored red base.
- * @param {number} i - flat grid index of the cell being shaded
+ * Tint for LAVA: animated `frame`-driven noise. Modifies the stored red base.
+ * @param {number} i - flat grid index of the cell being tinted
  * @param {number} p - pixel buffer byte offset (i * 4, pix is RGBA-packed)
- * @param {Uint8ClampedArray} data - the pix ImageData buffer; shader writes RGB channels into data[p..p+2]
+ * @param {Uint8ClampedArray} data - the pix ImageData buffer; tint writes RGB channels into data[p..p+2]
  */
-function shadeLava(i, p, data) {
+function tintLava(i, p, data) {
   const j = ((i + (frame >> 1)) * 17) & 31;
   data[p]   += j - 8;
   data[p+1] += (j - 16) * 0.6;
 }
 /**
- * Shader for [STEAM, SMOKE]: uniform brightness shift based on remaining lifetime; cells visibly fade as they age
+ * Tint for [STEAM, SMOKE]: uniform brightness shift based on remaining lifetime; cells visibly fade as they age
  * toward dissipation. Modifies base
- * @param {number} i - flat grid index of the cell being shaded
+ * @param {number} i - flat grid index of the cell being tinted
  * @param {number} p - pixel buffer byte offset (i * 4, pix is RGBA-packed)
- * @param {Uint8ClampedArray} data - the pix ImageData buffer; shader writes RGB channels into data[p..p+2]
+ * @param {Uint8ClampedArray} data - the pix ImageData buffer; tint writes RGB channels into data[p..p+2]
  */
-function shadeFading(i, p, data) {
+function tintFading(i, p, data) {
   const k = ((grid.lifetimes[i] | 0) / 6) & 31;
   data[p]   += k - 8;
   data[p+1] += k - 8;
   data[p+2] += k - 8;
 }
 /**
- * Shader for PLANT: age-tinted green. Older plants (higher grid.flags[i]) shift warm/yellow
+ * Tint for PLANT: age-tinted green. Older plants (higher grid.flags[i]) shift warm/yellow
  * Overwrites base
- * @param {number} i - flat grid index of the cell being shaded
+ * @param {number} i - flat grid index of the cell being tinted
  * @param {number} p - pixel buffer byte offset (i * 4, pix is RGBA-packed)
- * @param {Uint8ClampedArray} data - the pix ImageData buffer; shader writes RGB channels into data[p..p+2]
+ * @param {Uint8ClampedArray} data - the pix ImageData buffer; tint writes RGB channels into data[p..p+2]
  */
-function shadePlant(i, p, data) {
+function tintPlant(i, p, data) {
   const a = grid.flags[i] || 0;
   data[p]   = 60 + a * 4;
   data[p+1] = 180 - a * 2;
   data[p+2] = 80;
 }
 /**
- * Shader for SPARK: per-frame random bright yellow flicker. Pure overwrite (no base)
- * @param {number} i - flat grid index of the cell being shaded
+ * Tint for SPARK: per-frame random bright yellow flicker. Pure overwrite (no base)
+ * @param {number} i - flat grid index of the cell being tinted
  * @param {number} p - pixel buffer byte offset (i * 4, pix is RGBA-packed)
- * @param {Uint8ClampedArray} data - the pix ImageData buffer; shader writes RGB channels into data[p..p+2]
+ * @param {Uint8ClampedArray} data - the pix ImageData buffer; tint writes RGB channels into data[p..p+2]
  */
-function shadeSpark(i, p, data) {
+function tintSpark(i, p, data) {
   const k = (Math.random() * 60) | 0;
   data[p]   = 255;
   data[p+1] = 220 + k - 30;
   data[p+2] = 100 + k;
 }
 /**
- * Shader for FUSE: paints a burning orange/red pulse when lit. Unlit fuse keeps its
+ * Tint for FUSE: paints a burning orange/red pulse when lit. Unlit fuse keeps its
  * stored base color (early-return), only burning cells incur the per-frame overwrite cost.
- * @param {number} i - flat grid index of the cell being shaded
+ * @param {number} i - flat grid index of the cell being tinted
  * @param {number} p - pixel buffer byte offset (i * 4, pix is RGBA-packed)
- * @param {Uint8ClampedArray} data - the pix ImageData buffer; shader writes RGB channels into data[p..p+2]
+ * @param {Uint8ClampedArray} data - the pix ImageData buffer; tint writes RGB channels into data[p..p+2]
  */
-function shadeFuse(i, p, data) {
+function tintFuse(i, p, data) {
   if (grid.flags[i] !== 1) return;   // unlit: stored base color stands
   const k = (Math.random() * 50) | 0;
   data[p]   = 240 + k - 25;
@@ -2453,36 +2454,36 @@ function shadeFuse(i, p, data) {
   data[p+2] = 30 + k - 25;
 }
 /**
- * Shader for EMBER: per-frame random warm orange flicker. Pure overwrite (no base).
- * @param {number} i - flat grid index of the cell being shaded
+ * Tint for EMBER: per-frame random warm orange flicker. Pure overwrite (no base).
+ * @param {number} i - flat grid index of the cell being tinted
  * @param {number} p - pixel buffer byte offset (i * 4, pix is RGBA-packed)
- * @param {Uint8ClampedArray} data - the pix ImageData buffer; shader writes RGB channels into data[p..p+2]
+ * @param {Uint8ClampedArray} data - the pix ImageData buffer; tint writes RGB channels into data[p..p+2]
  */
-function shadeEmber(i, p, data) {
+function tintEmber(i, p, data) {
   const k = (Math.random() * 40) | 0;
   data[p]   = 255;
   data[p+1] = 150 + k;
   data[p+2] = 30 + (k >> 1);
 }
 /**
- * Shader for MOLD: slow `frame`-driven creep of green fuzziness across the screen.
- * @param {number} i - flat grid index of the cell being shaded
+ * Tint for MOLD: slow `frame`-driven creep of green fuzziness across the screen.
+ * @param {number} i - flat grid index of the cell being tinted
  * @param {number} p - pixel buffer byte offset (i * 4, pix is RGBA-packed)
- * @param {Uint8ClampedArray} data - the pix ImageData buffer; shader writes RGB channels into data[p..p+2]
+ * @param {Uint8ClampedArray} data - the pix ImageData buffer; tint writes RGB channels into data[p..p+2]
  */
-function shadeMold(i, p, data) {
+function tintMold(i, p, data) {
   const k = ((i * 91 + (frame >> 3)) & 31);  // +-3 brightness shift
   data[p]   = 90 + k;
   data[p+1] = 130 + (k >> 1);
   data[p+2] = 70 + (k >> 2);
 }
 /**
- * Shader for WALL: embossed outline around its edges.
- * @param {number} i - flat grid index of the cell being shaded
+ * Tint for WALL: embossed outline around its edges.
+ * @param {number} i - flat grid index of the cell being tinted
  * @param {number} p - pixel buffer byte offset (i * 4, pix is RGBA-packed)
- * @param {Uint8ClampedArray} data - the pix ImageData buffer; shader writes RGB channels into data[p..p+2]
+ * @param {Uint8ClampedArray} data - the pix ImageData buffer; tint writes RGB channels into data[p..p+2]
  */
-function shadeWall(i, p, data) {
+function tintWall(i, p, data) {
   const x = cellX(i), y = cellY(i);
   let adjust = 0;
   for (let dy = -1; dy <= 1; dy++) {
@@ -2498,7 +2499,7 @@ function shadeWall(i, p, data) {
   data[p+2] += adjust;
 }
 
-//endregion Shaders
+//endregion Tints
 
 
 
