@@ -372,7 +372,7 @@ const E_FIRE       = 6;
 const E_LAVA       = 7;
 const E_STEAM      = 8;
 const E_ICE        = 9;
-const E_STONE      = 10;
+const E_BASALT      = 10;
 const E_GLASS      = 11;
 const E_PLANT      = 12;
 const E_ACID       = 13;
@@ -460,8 +460,8 @@ const ELEMENT_DEFS = [
   },
 
   {
-    id: E_STONE, name: 'Stone', kind: KIND_POWDER,
-    pigment: pigmentStone,
+    id: E_BASALT, name: 'Basalt', kind: KIND_POWDER,
+    pigment: pigmentBasalt, previewColor: '#736969',
     density: 5, surfaceFriction: 850,
     defaultTemp: 30, thermalMass: 8,
   },
@@ -793,7 +793,7 @@ function cellInBounds(x, y) {
 function applyPigment(i, element) {
   const gen = M_PIGMENT_FACTORY[element];
   if (gen === null) return;
-  const rgb = gen();
+  const rgb = gen(i);
   grid.colorR[i] = rgb[0];
   grid.colorG[i] = rgb[1];
   grid.colorB[i] = rgb[2];
@@ -1159,7 +1159,7 @@ function tickCell(x, y) {
     case E_STEAM:     tickSteam(i, temp);           break;
     case E_ICE:       tickIce(i, temp);             break;
     case E_LAVA:      tickLava(i, x, y, temp);      break;
-    case E_STONE:     tickStone(i, temp);           break;
+    case E_BASALT:     tickStone(i, temp);           break;
     case E_SAND:      tickSand(i, temp);            break;
     case E_GLASS:     tickGlass(i, temp);           break;
     case E_FIRE:      tickFire(i, x, y);            break;
@@ -1246,7 +1246,7 @@ function tickLava(i, x, y, temp) {
 
   if (waterI !== -1) {
     // React: this lava -> STONE, the contacted water -> STEAM.
-    setCell(i, E_STONE, 380);
+    setCell(i, E_BASALT, 380);
 
     setCell(waterI, E_STEAM, 150);
     grid.lifetimes[waterI] = 800 + randInt(400);   // long-lived burst steam (wider than default)
@@ -1263,7 +1263,7 @@ function tickLava(i, x, y, temp) {
           const dist = Math.abs(dx) + Math.abs(dy);
           const p = dist === 1 ? 0.55 : dist === 2 ? 0.22 : 0.08;
           if (Math.random() < p) {
-            setCell(k, E_STONE, 360);
+            setCell(k, E_BASALT, 360);
             grid.tickedThisFrame[k] = 1;
           } else {
             grid.temps[k] -= 30;   // cool the rest a bit
@@ -1297,7 +1297,7 @@ function tickLava(i, x, y, temp) {
   }
   // Harden back to STONE
   if (temp < 480) {
-    setCell(i, E_STONE, 460);
+    setCell(i, E_BASALT, 460);
   }
 }
 /**
@@ -2096,24 +2096,14 @@ function renderMainView() {
       data[p+2] = grid.colorB[i];
     }
 
-    // Step 2: per-frame shader dispatch
-    const shader = M_SHADER[e];
-    if (typeof shader === 'function') shader(i, p, data);
-    // ONLY INLINE if we prove the hit is severe for megamorphic dispatch
-    //switch (e) {
-    //  case E_EMPTY:    shadeEmpty(i, p, data);  break;
-    //  case E_WALL:     shadeWall(i, p, data);  break;
-    //  case E_WATER:    shadeWater(i, p, data);  break;
-    //  case E_FIRE:     shadeFire(i, p, data);      break;
-    //  case E_LAVA:     shadeLava(i, p, data);   break;
-    //  case E_STEAM:    shadeFading(i, p, data); break;
-    //  case E_PLANT:    shadePlant(i, p, data);  break;
-    //  case E_SMOKE:    shadeFading(i, p, data); break;
-    //  case E_SPARK:    shadeSpark(i, p, data);     break;
-    //  case E_FUSE:     shadeFuse(i, p, data);   break;
-    //  case E_EMBER:    shadeEmber(i, p, data);     break;
-    //  case E_MOLD:     shadeMold(i, p, data);   break;
-    //}
+    // Step 2: per-frame shader dispatch. High perf shaders get inlined, everything else is automatically dispatched
+    switch (e) {
+      case E_FIRE:     shadeFire(i, p, data);      break;
+      default: {
+        const s = M_SHADER[e];
+        if (s) s(i, p, data);
+      }
+    }
 
     // Step 3: PostFX bookkeeping. If this element participates in any post-processing
     // effect, record its index now while we already have it cached. renderPostFXPass
@@ -2181,6 +2171,35 @@ function renderHeatView() {
 // *********************************************************************
 //region Pigment
 
+function desaturate(r, g, b, amount = 0.06) {
+  // perceptual-ish luminance, better than plain average
+  const gray = r * 0.299 + g * 0.587 + b * 0.114;
+
+  return [
+    clampByte(r + (gray - r) * amount),
+    clampByte(g + (gray - g) * amount),
+    clampByte(b + (gray - b) * amount),
+  ];
+}
+// Smooth bilinear hash field
+function bNoise(x, y, scale) {
+  const gx = x / scale, gy = y / scale;
+  const x0 = Math.floor(gx), y0 = Math.floor(gy);
+  const fx = gx - x0, fy = gy - y0;
+  const sx = fx*fx*(3-2*fx), sy = fy*fy*(3-2*fy);
+  const h = (a, b) => {
+    let n = Math.imul((a*374761393 + b*668265263) ^ ((a*374761393 + b*668265263) >>> 13), 1274126177);
+    return ((n ^ (n >>> 16)) >>> 0) / 4294967295;
+  };
+  const a = h(x0, y0)   + (h(x0+1, y0)   - h(x0, y0))   * sx;
+  const b = h(x0, y0+1) + (h(x0+1, y0+1) - h(x0, y0+1)) * sx;
+  return a + (b - a) * sy;   // 0..1
+}
+
+function fmod(a, m) {
+  return ((a % m) + m) % m;
+}
+
 /**
  * Shared helper for elements that use a base color + per-grain pseudo-random tint. Produces a "speckled grain" look
  * @param {number} baseR - red (0-255) per-grain variation adds ±16
@@ -2214,16 +2233,82 @@ function pigmentSand() {
     if (r < SAND_GRAINS[k][3]) { g = SAND_GRAINS[k]; break; }
   }
   const j = (Math.random() * 2 - 1) * 13;
-  return [clampByte(g[0] + j), clampByte(g[1] + j * 0.8), clampByte(g[2] + j * 0.5)];
+
+  const r2 = g[0] + j;
+  const g2 = g[1] + j * 0.8;
+  const b2 = g[2] + j * 0.5;
+
+  return desaturate(r2, g2, b2, -0.05);
 }
 
-/**
- * Pigment for STONE: dark gray with per-grain noise variation.
- * @returns {[number, number, number]} - (r, g, b) tuple in 0-255 range
- */
-function pigmentStone() {
-  return makeGrainyVariation(100,  90,  90);
+
+// distance from hex center to point in hex metric: ~0 at center, ~0.5 at edge
+function _basaltHexDist(px, py) {
+  px = Math.abs(px); py = Math.abs(py);
+  const inv = 1 / 1.99822;                       // 1/|(1,1.73)|
+  return Math.max(px * inv + py * 1.73 * inv, px);
 }
+// returns local coords within nearest hex + that hex's id
+function _basaltHexCoords(ux, uy) {
+  let ax = fmod(ux, 1) - 0.5,         ay = fmod(uy, 1.73) - 0.865;
+  let bx = fmod(ux - 0.5, 1) - 0.5,   by = fmod(uy - 0.865, 1.73) - 0.865;
+  const useA = (ax*ax + ay*ay) < (bx*bx + by*by);
+  const gx = useA ? ax : bx, gy = useA ? ay : by;
+  return { gx, gy, idx: ux - gx, idy: uy - gy, edge: _basaltHexDist(gx, gy) };
+}
+// stable per-column hash (reuses your existing hash constants)
+function _basaltHexHash(idx, idy) {
+  const a = Math.round(idx * 2);         // x centers spaced 0.5
+  const b = Math.round(idy / 0.865);     // y centers spaced 0.865
+  let n = Math.imul((a*374761393 + b*668265263) ^ ((a*374761393 + b*668265263) >>> 13), 1274126177);
+  return ((n ^ (n >>> 16)) >>> 0) / 4294967295;
+}
+/**
+ * Pigment for BASALT: dark volcanic grain + baked-in hexagonal columns.
+ * Columns read as a wall when intact; shatter into dark rubble once cells move.
+ */
+function pigmentBasalt(i) {
+  const x = i % COLS, y = (i / COLS) | 0;
+
+  // --- geometric layer (position-based, bakes at spawn) ---
+  const HEX = 9;
+  const WARP = 2.2;                                   // px of wobble — your main knob
+  let wx = x + (bNoise(x,      y,      14) - 0.5) * 2 * WARP;
+  let wy = y + (bNoise(x + 99, y + 99, 14) - 0.5) * 2 * WARP;   // +99 decorrelates the axes
+  wx += (bNoise(x + 11, y + 11, 38) - 0.5) * 2 * (WARP * 2.0);
+  wy += (bNoise(x + 71, y + 71, 38) - 0.5) * 2 * (WARP * 2.0);
+  const hc = _basaltHexCoords(wx / HEX, wy / HEX);
+
+  const colTone  = (_basaltHexHash(hc.idx, hc.idy) - 0.5) * 14;
+  const edge     = hc.edge + (bNoise(x + 7, y + 7, 2) - 0.5) * 0.04;
+  const jointAmt = edge > 0.46 ? (edge - 0.46) / 0.04 : 0;   // 0..1+, depth into the seam
+
+  // --- material layer (position-free, sand-style discrete grains) ---
+  const BASALT = [
+    [44, 44, 49, 0.55],   // charcoal, faintly cool
+    [38, 38, 40, 0.82],   // neutral dark
+    [54, 51, 47, 0.93],   // warm fleck
+    [28, 28, 33, 0.985],  // deep shadow
+    [78, 75, 70, 1.000],  // rare plagioclase speck
+  ];
+  const r = Math.random();
+  let m = BASALT[BASALT.length - 1];
+  for (let k = 0; k < BASALT.length; k++) { if (r < BASALT[k][3]) { m = BASALT[k]; break; } }
+  const j = (Math.random() * 2 - 1) * 6;
+
+  const DARK = -26;   // how dark the seams go (unchanged)
+  const TINT =   9;   // how BLUE the seams go — your new knob
+  const dark = jointAmt * DARK;
+  const tint = jointAmt * TINT;
+  const COOL = 2;     // faint floor so fallen grains aren't pure asphalt
+  return [
+    clampByte(m[0] + j        + colTone + dark - tint * 0.7 - COOL),
+    clampByte(m[1] + j * 0.85 + colTone + dark - tint * 0.2 - COOL * 0.3),
+    clampByte(m[2] + j * 0.70 + colTone + dark + tint       + COOL),
+  ];
+}
+
+
 /**
  * Pigment for GUNPOWDER: near-black with per-grain noise variation.
  * @returns {[number, number, number]} - (r, g, b) tuple in 0-255 range
@@ -2559,7 +2644,7 @@ function S(x, y, element) {
 const SCENES = {
   volcano() {
     clearAll();
-    R(0, 130, _RX, _RY, E_STONE);
+    R(0, 130, _RX, _RY, E_BASALT);
     // cone: narrow at top (y=60) widening downward (y=130)
     const cx = SX(100);
     const yTop = SY(60), yBottom = SY(130);
@@ -2570,7 +2655,7 @@ const SCENES = {
       const innerHalf = Math.max(0, outerHalf - (6 * wScale) | 0);
       for (let x = cx - outerHalf; x <= cx + outerHalf; x++) {
         const dist = Math.abs(x - cx);
-        if (dist > innerHalf && cellInBounds(x, y)) setCell(cellIndex(x, y), E_STONE, M_DEFAULT_TEMP[E_STONE]);
+        if (dist > innerHalf && cellInBounds(x, y)) setCell(cellIndex(x, y), E_BASALT, M_DEFAULT_TEMP[E_BASALT]);
       }
     }
     // lava chamber inside the cone (lower portion only)
@@ -2732,7 +2817,7 @@ const buttons = {};
 const PALETTE_ORDER = [
   E_EMPTY, E_WALL, E_SAND, E_WATER, E_WOOD, E_FIRE,
   E_LAVA, E_STEAM, E_ICE, E_PLANT, E_ACID, E_GUNPOWDER,
-  E_OIL, E_STONE, E_GLASS, E_SPARK, E_FUSE, E_SALT,
+  E_OIL, E_BASALT, E_GLASS, E_SPARK, E_FUSE, E_SALT,
   E_MOLD
 ];
 
